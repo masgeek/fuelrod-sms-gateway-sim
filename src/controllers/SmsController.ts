@@ -2,7 +2,7 @@ import {Request, Response} from 'express';
 import {v4 as uuidv4} from 'uuid';
 import {messages, sendCallbackWithRetry} from '../services/SmsService';
 import {config} from '../config/env';
-import {SmsMessage} from '../models/SmsMessage';
+import {SmsMessage, SmsMessageResp} from '../models/SmsMessage';
 import {sendSmsSchema, getSmsStatusSchema, sendSmsSchemaStrict} from '../validators/SmsValidator';
 import {logger} from '../utils/logger';
 import {ZodError} from 'zod';
@@ -46,28 +46,28 @@ export const sendSms = async (req: Request, res: Response): Promise<Response> =>
         const timestamp = new Date().toISOString();
 
         const sms: SmsMessage = {
-            phone_number,
-            message,
+            phone_number: phone_number,
+            message: message,
             status: 'MESSAGE_SENT', // assume instant delivery
-            timestamp
+            timestamp: timestamp
         };
-
-        messages.set(messageId, sms);
 
         logger.info(`✅ SMS delivered instantly to ${phone_number} with ID ${messageId}`);
 
+        const payload: SmsMessageResp = {
+            message_id: messageId,
+            status: sms.status,
+            phone_number: sms.phone_number,
+            delivered_at: new Date().toISOString()
+        };
+
+        messages.set(messageId, payload);
         // Immediately trigger callback if configured
         if (config.callbackUrl) {
-            const payload = {
-                message_id: messageId,
-                status: sms.status,
-                phone_number: sms.phone_number,
-                deliveredAt: sms.delivered_at
-            };
-
+            const callbackData = {...payload, network_code: 100}
             sendCallbackWithRetry({
                     url: config.callbackUrl,
-                    payload: payload,
+                    callBackData: callbackData,
                     max_retries: config.max_retries
                 }
             ).catch(error => {
@@ -78,13 +78,7 @@ export const sendSms = async (req: Request, res: Response): Promise<Response> =>
         return res.status(202).json({
             success: true,
             message: 'SMS sent',
-            data: {
-                message_id: messageId,
-                phone_number,
-                status: sms.status,
-                timestamp: sms.timestamp,
-                delivered_at: sms.delivered_at
-            }
+            data: sms
         });
 
     } catch (error) {
@@ -132,7 +126,6 @@ export const getSmsStatus = async (req: Request, res: Response): Promise<Respons
                 message_id: messageId,
                 phone_number: record.phone_number,
                 status: record.status,
-                timestamp: record.timestamp,
                 ...(record.delivered_at && {delivered_at: record.delivered_at})
             }
         });

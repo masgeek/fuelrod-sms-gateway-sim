@@ -1,6 +1,7 @@
 export interface SmsMessage {
     phone_number: string;
     message: string;
-    status: 'QUEUED' | 'MESSAGE_SENT' | 'DELIVERED' | 'FAILED';
+    status: 'MESSAGE_SENT' | 'DELIVERED' | 'FAILED';
+    delivered_at?: string;
     timestamp: string;
 }

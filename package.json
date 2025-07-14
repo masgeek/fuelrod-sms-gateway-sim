@@ -1,0 +1,28 @@
+{
+  "name": "fuelrod-sms-gateway",
+  "version": "1.0.0",
+  "author": "Sammy Barasa <sammy@munywele.co.ke>",
+  "license": "APACHE2",
+  "description": "SMS mocking gateway",
+  "repository": "htps://gateway.munywele.co.ke",
+  "private": true,
+  "main": "dist/app.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/app.js",
+    "dev-old": "nodemon --watch src --exec ts-node src/app.ts",
+    "dev": "ts-node-dev --respawn --transpile-only src/index.ts"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/node": "^24.0.13",
+    "nodemon": "^3.1.10",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.8.3"
+  }
+}

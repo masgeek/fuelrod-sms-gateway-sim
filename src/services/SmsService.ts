@@ -1,29 +1,29 @@
 import axios from 'axios';
-import { SmsMessage } from '../models/SmsMessage';
-import { logger } from '../utils/logger';
+import {SmsMessage, SmsMessageResp} from '../models/SmsMessage';
+import {logger} from '../utils/logger';
 
 const BASE_DELAY_MS = 2000;
 
 interface CallbackRetryParams {
     url: string;
-    payload: Record<string, any>;
+    callBackData: Record<string, any>;
     max_retries?: number;
     attempt?: number;
 }
 
-export const messages = new Map<string, SmsMessage>();
+export const messages = new Map<string, SmsMessageResp>();
 
 export async function sendCallbackWithRetry({
                                                 url,
-                                                payload,
+                                                callBackData,
                                                 max_retries = 1,
                                                 attempt = 0
                                             }: CallbackRetryParams): Promise<void> {
     try {
         const response = await axios.post(
             url,
-            { ...payload, retry_count: attempt },
-            { timeout: 5000 } // optional: 5-second timeout
+            {...callBackData, retry_count: attempt},
+            {timeout: 5000} // optional: 5-second timeout
         );
 
         if (response.status < 200 || response.status >= 300) {
@@ -45,9 +45,9 @@ export async function sendCallbackWithRetry({
             await new Promise(resolve => setTimeout(resolve, delay));
 
             await sendCallbackWithRetry({
-                url,
-                payload,
-                max_retries,
+                url: url,
+                callBackData: callBackData,
+                max_retries: max_retries,
                 attempt: attempt + 1
             });
         } else {

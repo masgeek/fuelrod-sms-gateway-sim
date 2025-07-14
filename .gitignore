@@ -1,0 +1,24 @@
+# Node.js dependencies
+node_modules/
+
+# Output directory
+dist/
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Env config (optional)
+.env
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/

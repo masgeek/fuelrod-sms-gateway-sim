@@ -29,6 +29,6 @@ function parseNumber(value: string | undefined, fallback: number): number {
 export const config = {
     port: parseNumber(process.env.PORT, 3000),
     callbackUrl: process.env.SMS_CALLBACK_URL || '',
-    max_retries: parseNumber(process.env.MAX_RETRIES, 5),
+    max_retries: parseNumber(process.env.MAX_RETRIES, 0),
     env: NODE_ENV,
 };

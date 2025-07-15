@@ -1,5 +1,5 @@
 import {Request, Response} from 'express';
-import {v4 as uuidv4} from 'uuid';
+import {ulid} from 'ulid';
 import {messages, sendCallbackWithRetry} from '../services/SmsService';
 import {config} from '../config/env';
 import {SmsMessage, SmsMessageResp} from '../models/SmsMessage';
@@ -43,7 +43,7 @@ export const sendSms = async (req: Request, res: Response): Promise<Response> =>
         }
 
         const {phone_number, message} = result.data;
-        const messageId = uuidv4();
+        const messageId = `FR_${ulid()}`
         const timestamp = new Date().toISOString();
 
         const carrierInfo = await enrichCarrierInfo(phone_number);
@@ -55,7 +55,8 @@ export const sendSms = async (req: Request, res: Response): Promise<Response> =>
             phone_number: phone_number,
             message: message,
             status: 'MESSAGE_SENT', // assume instant delivery
-            timestamp: timestamp
+            timestamp: timestamp,
+            network_code: carrierInfo?.network_code ?? 0,
         };
 
         logger.info(`✅ SMS delivered instantly`, {
@@ -137,6 +138,7 @@ export const getSmsStatus = async (req: Request, res: Response): Promise<Respons
                 message_id: messageId,
                 phone_number: record.phone_number,
                 status: record.status,
+                network_code: record.network_code,
                 ...(record.delivered_at && {delivered_at: record.delivered_at})
             }
         });

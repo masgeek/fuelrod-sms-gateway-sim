@@ -15,12 +15,19 @@
     "prod": "cross-env NODE_ENV=production ts-node src/indes.ts",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "prisma:gen": "npx prisma generate"
   },
   "dependencies": {
+    "@prisma/client": "^6.11.1",
+    "@types/google-libphonenumber": "^7.4.30",
     "axios": "^1.10.0",
     "dotenv": "^17.2.0",
     "express": "^5.1.0",
+    "google-libphonenumber": "^3.2.42",
+    "libphonenumber-js": "^1.12.10",
+    "pg": "^8.16.3",
+    "prisma": "^6.11.1",
     "uuid": "^11.1.0",
     "winston": "^3.17.0",
     "zod": "^4.0.5"
@@ -29,6 +36,7 @@
     "@types/express": "^5.0.3",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.0.13",
+    "@types/pg": "^8.15.4",
     "@types/supertest": "^6.0.3",
     "cross-env": "^7.0.3",
     "jest": "^30.0.4",

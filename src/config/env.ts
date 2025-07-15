@@ -31,6 +31,5 @@ export const config = {
     callback_url: process.env.SMS_CALLBACK_URL || '',
     fuelrod_api: process.env.FUELROD_API_URL || '',
     max_retries: parseNumber(process.env.MAX_RETRIES, 0),
-    database_url: process.env.DATABASE_URL || '',
     env: NODE_ENV,
 };

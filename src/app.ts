@@ -16,6 +16,13 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
     next(err);
 });
 
+app.get('/api/health', (_, res: Response) => {
+    res.status(200).json({
+        status: 'ok',
+        uptime: process.uptime(),
+        timestamp: new Date().toISOString()
+    });
+});
 app.use('/api/v1', smsRoutes);
 
 export default app;

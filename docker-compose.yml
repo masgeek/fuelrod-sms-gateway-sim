@@ -1,0 +1,16 @@
+services:
+  sms-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: masgeek/fuelrod-sms-gateway:${TAG_VERSION:-latest}
+    container_name: sms-gateway
+    #    env_file:
+    #      - .env.production
+    ports:
+      - "3002:3000"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:3000/api/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3

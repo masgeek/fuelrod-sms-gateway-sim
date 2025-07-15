@@ -30,7 +30,7 @@ export async function sendCallbackWithRetry({
             throw new Error(`Non-success response: ${response.status}`);
         }
 
-        logger.info(`✅ Callback succeeded (attempt ${attempt + 1})`);
+        logger.info(`✅ Callback succeeded (attempt ${attempt + 1})`, response.data);
     } catch (err: any) {
         logger.warn(`⚠️ Callback attempt ${attempt + 1} failed: ${err.message}`);
 

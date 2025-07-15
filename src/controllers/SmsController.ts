@@ -58,7 +58,11 @@ export const sendSms = async (req: Request, res: Response): Promise<Response> =>
             timestamp: timestamp
         };
 
-        logger.info(`✅ SMS delivered instantly to ${phone_number} with ID ${messageId}`);
+        logger.info(`✅ SMS delivered instantly`, {
+            message_id: messageId,
+            status: sms.status,
+            carrier_info: carrierInfo
+        });
 
         const payload: SmsMessageResp = {
             message_id: messageId,

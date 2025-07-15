@@ -14,7 +14,7 @@ const envFiles: string[] = [
 envFiles.forEach((file) => {
     const fullPath = path.join(ROOT_DIR, file);
     if (fs.existsSync(fullPath)) {
-        dotenv.config({ path: fullPath, override: true });
+        dotenv.config({path: fullPath, override: true});
         if (NODE_ENV !== 'production') {
             console.log(`📦 Loaded env: ${file}`);
         }
@@ -28,7 +28,9 @@ function parseNumber(value: string | undefined, fallback: number): number {
 
 export const config = {
     port: parseNumber(process.env.PORT, 3000),
-    callbackUrl: process.env.SMS_CALLBACK_URL || '',
+    callback_url: process.env.SMS_CALLBACK_URL || '',
+    fuelrod_api: process.env.FUELROD_API_URL || '',
     max_retries: parseNumber(process.env.MAX_RETRIES, 0),
+    database_url: process.env.DATABASE_URL || '',
     env: NODE_ENV,
 };

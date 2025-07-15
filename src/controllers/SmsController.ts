@@ -51,6 +51,7 @@ export const sendSms = async (req: Request, res: Response): Promise<Response> =>
             logger.warn(`⚠️ Could not enrich carrier info for ${phone_number}`);
         }
         const sms: SmsMessage = {
+            message_id: messageId,
             phone_number: phone_number,
             message: message,
             status: 'MESSAGE_SENT', // assume instant delivery

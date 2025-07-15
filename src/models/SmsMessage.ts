@@ -4,6 +4,7 @@ export type SmsStatus = 'MESSAGE_SENT' | 'DELIVERED' | 'FAILED';
  * Represents an SMS message stored or being processed.
  */
 export interface SmsMessage {
+    message_id: string;         // Unique message identifier
     phone_number: string;   // E.164 formatted phone number
     message: string;        // The text message content
     status: SmsStatus;      // Current status of the message

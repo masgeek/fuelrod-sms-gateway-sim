@@ -7,6 +7,7 @@ export interface SmsMessage {
     message_id: string;         // Unique message identifier
     phone_number: string;   // E.164 formatted phone number
     message: string;        // The text message content
+    network_code: number;       // Network code
     status: SmsStatus;      // Current status of the message
     timestamp: string;      // ISO 8601 timestamp of when the message was sent
 }
@@ -17,7 +18,7 @@ export interface SmsMessage {
 export interface SmsMessageResp {
     message_id: string;         // Unique message identifier
     phone_number: string;       // E.164 formatted phone number
-    network_code: number;       // E.164 formatted phone number
+    network_code: number;       // Network code
     status: SmsStatus;          // Delivery status
     delivered_at?: string;      // Timestamp of delivery (if delivered or failed)
 }

@@ -23,4 +23,9 @@ Thumbs.db
 .vscode/
 .idea/
 
+#JEST
+coverage/
+
 *.log
+
+generated/

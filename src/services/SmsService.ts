@@ -1,27 +1,57 @@
 import axios from 'axios';
-import {SmsMessage} from '../models/SmsMessage';
+import {SmsMessage, SmsMessageResp} from '../models/SmsMessage';
+import {logger} from '../utils/logger';
 
-const MAX_RETRIES = 3;
-const RETRY_DELAY_MS = 2000;
+const BASE_DELAY_MS = 2000;
 
-export const messages = new Map<string, SmsMessage>();
+interface CallbackRetryParams {
+    url: string;
+    callBackData: Record<string, any>;
+    max_retries?: number;
+    attempt?: number;
+}
 
-export async function sendCallbackWithRetry(
-    url: string,
-    payload: any,
-    attempt: number = 0
-): Promise<void> {
+export const messages = new Map<string, SmsMessageResp>();
+
+export async function sendCallbackWithRetry({
+                                                url,
+                                                callBackData,
+                                                max_retries = 1,
+                                                attempt = 0
+                                            }: CallbackRetryParams): Promise<void> {
     try {
-        await axios.post(url, {...payload, retry_count: attempt});
-        console.log(`✅ Callback succeeded (attempt ${attempt + 1})`);
+        const response = await axios.post(
+            url,
+            {...callBackData, retry_count: attempt},
+            {timeout: 5000} // optional: 5-second timeout
+        );
+
+        if (response.status < 200 || response.status >= 300) {
+            throw new Error(`Non-success response: ${response.status}`);
+        }
+
+        logger.info(`✅ Callback succeeded (attempt ${attempt + 1})`);
     } catch (err: any) {
-        console.error(`⚠️ Callback attempt ${attempt + 1} failed: ${err.message}`);
-        if (attempt < MAX_RETRIES - 1) {
-            setTimeout(() => {
-                sendCallbackWithRetry(url, payload, attempt + 1);
-            }, RETRY_DELAY_MS);
+        logger.warn(`⚠️ Callback attempt ${attempt + 1} failed: ${err.message}`);
+
+        if (attempt < max_retries - 1) {
+            // Exponential backoff with jitter
+            const baseDelay = BASE_DELAY_MS * Math.pow(2, attempt);
+            const jitter = Math.floor(Math.random() * BASE_DELAY_MS);
+            const delay = baseDelay + jitter;
+
+            logger.info(`⏳ Retrying callback in ${delay}ms (attempt ${attempt + 2}/${max_retries})`);
+
+            await new Promise(resolve => setTimeout(resolve, delay));
+
+            await sendCallbackWithRetry({
+                url: url,
+                callBackData: callBackData,
+                max_retries: max_retries,
+                attempt: attempt + 1
+            });
         } else {
-            console.error(`❌ Callback failed after ${MAX_RETRIES} attempts.`);
+            logger.error(`❌ Callback failed after ${max_retries} attempts.`);
         }
     }
 }

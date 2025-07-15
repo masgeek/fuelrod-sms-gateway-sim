@@ -1,5 +1,5 @@
 import {Router} from 'express';
-import {sendSms, getSmsStatus} from '../controllers/SmsController';
+import {test,sendSms, getSmsStatus} from '../controllers/SmsController';
 
 const router = Router();
 

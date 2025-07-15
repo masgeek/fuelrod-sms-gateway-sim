@@ -6,6 +6,7 @@ import {SmsMessage, SmsMessageResp} from '../models/SmsMessage';
 import {sendSmsSchema, getSmsStatusSchema, sendSmsSchemaStrict} from '../validators/SmsValidator';
 import {logger} from '../utils/logger';
 import {ZodError} from 'zod';
+import {enrichCarrierInfo} from "../lib/EnrichCarrier";
 
 /**
  * Formats Zod validation errors for better readability
@@ -45,6 +46,10 @@ export const sendSms = async (req: Request, res: Response): Promise<Response> =>
         const messageId = uuidv4();
         const timestamp = new Date().toISOString();
 
+        const carrierInfo = await enrichCarrierInfo(phone_number);
+        if (!carrierInfo) {
+            logger.warn(`⚠️ Could not enrich carrier info for ${phone_number}`);
+        }
         const sms: SmsMessage = {
             phone_number: phone_number,
             message: message,
@@ -58,15 +63,16 @@ export const sendSms = async (req: Request, res: Response): Promise<Response> =>
             message_id: messageId,
             status: sms.status,
             phone_number: sms.phone_number,
+            network_code: carrierInfo?.network_code ?? 0,
             delivered_at: new Date().toISOString()
         };
 
         messages.set(messageId, payload);
         // Immediately trigger callback if configured
-        if (config.callbackUrl) {
-            const callbackData = {...payload, network_code: 100}
+        if (config.callback_url) {
+            const callbackData = {...payload}
             sendCallbackWithRetry({
-                    url: config.callbackUrl,
+                    url: config.callback_url,
                     callBackData: callbackData,
                     max_retries: config.max_retries
                 }

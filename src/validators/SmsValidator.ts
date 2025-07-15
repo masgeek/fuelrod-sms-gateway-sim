@@ -19,19 +19,21 @@ export const sendSmsSchema = z.object({
 // Schema for getting SMS status
 export const getSmsStatusSchema = z.object({
     messageId: z
-        .uuid('Invalid message ID format')
+        .ulid('Invalid message ID format')
 });
 
 // Alternative with country code validation
 export const sendSmsSchemaStrict = z.object({
     phone_number: z
         .string()
-        .regex(/^\+[1-9]\d{1,14}$/, 'Phone number must be in E.164 format (e.g., +1234567890)'),
+        .min(1, 'Phone number cannot be empty')
+        // .regex(/^\+[1-9]\d{1,14}$/, 'Phone number must be in international format')
+        .trim(),
 
     message: z
         .string()
         .min(1, 'Message cannot be empty')
-        .max(1600, 'Message exceeds maximum length of 1600 characters')
+        // .max(1600, 'Message exceeds maximum length of 1600 characters')
         .trim()
 });
 

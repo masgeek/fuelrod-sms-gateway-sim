@@ -38,7 +38,8 @@ export const sendSms = async (req: Request, res: Response): Promise<Response> =>
 
             return res.status(400).json({
                 error: 'Validation failed',
-                details: validationErrors
+                response_code: 400,
+                errors: validationErrors
             });
         }
 

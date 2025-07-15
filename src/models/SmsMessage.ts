@@ -16,6 +16,7 @@ export interface SmsMessage {
 export interface SmsMessageResp {
     message_id: string;         // Unique message identifier
     phone_number: string;       // E.164 formatted phone number
+    network_code: number;       // E.164 formatted phone number
     status: SmsStatus;          // Delivery status
     delivered_at?: string;      // Timestamp of delivery (if delivered or failed)
 }

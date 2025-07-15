@@ -27,7 +27,7 @@ function parseNumber(value: string | undefined, fallback: number): number {
 }
 
 export const config = {
-    port: parseNumber(process.env.PORT, 3000),
+    port: parseNumber(process.env.PORT, 80),
     callback_url: process.env.SMS_CALLBACK_URL || 'https://n8n.munywele.co.ke/webhook/fuelrod-sms-gateway',
     fuelrod_api: process.env.FUELROD_API_URL || 'https://api.munywele.co.ke',
     max_retries: parseNumber(process.env.MAX_RETRIES, 3),

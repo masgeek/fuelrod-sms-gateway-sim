@@ -1,0 +1,24 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model MobileNetwork {
+  id           BigInt    @id(map: "idx_17222_primary") @default(autoincrement())
+  country      String?   @db.VarChar(150)
+  country_code String?   @db.VarChar(5)
+  mcc_code     BigInt?
+  mcc_ref      BigInt?   @unique(map: "idx_17222_mcc_ref")
+  mnc_code     BigInt?
+  network_name String?   @db.VarChar(200)
+  mobile_code  BigInt?
+  created_at   DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime? @default(now()) @db.Timestamptz(6)
+
+  @@map("mobile_network")
+}

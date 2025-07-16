@@ -12,7 +12,7 @@ jobs:
     uses: ./.github/workflows/docker-build-job.yml
     with:
       dockerfile: Dockerfile
-      image_name: masgeek/fuelrod-sms-portal
+      image_name: masgeek/fuelrod-sms-gateway
     secrets:
       docker_username: ${{ secrets.DOCKER_USERNAME }}
       docker_password: ${{ secrets.DOCKER_PASSWORD }}

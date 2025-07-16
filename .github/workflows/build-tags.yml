@@ -12,7 +12,7 @@ jobs:
     uses: ./.github/workflows/check-tag-job.yml
     with:
       dockerfile: Dockerfile
-      image_name: masgeek/fuelrod-sms-portal
+      image_name: masgeek/fuelrod-sms-gateway
       specific_tag: ${{ inputs.tag }}
       force_rebuild: true
     secrets:

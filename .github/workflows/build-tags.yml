@@ -1,0 +1,20 @@
+name: TagBuilder
+
+on:
+  workflow_run:
+    workflows:
+      - BumpVersion
+    types:
+      - completed
+
+jobs:
+  check-and-build:
+    uses: ./.github/workflows/check-tag-job.yml
+    with:
+      dockerfile: Dockerfile
+      image_name: masgeek/fuelrod-sms-portal
+      specific_tag: ${{ inputs.tag }}
+      force_rebuild: true
+    secrets:
+      docker_username: ${{ secrets.DOCKER_USERNAME }}
+      docker_password: ${{ secrets.DOCKER_PASSWORD }}

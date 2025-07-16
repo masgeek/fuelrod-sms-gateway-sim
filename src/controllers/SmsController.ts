@@ -60,7 +60,7 @@ export const sendSms = async (req: Request, res: Response): Promise<Response> =>
             network_code: carrierInfo?.network_code ?? 0,
         };
 
-        logger.info(`✅ SMS delivered instantly`, {
+        logger.debug(`✅ SMS delivered instantly`, {
             message_id: messageId,
             status: sms.status,
             carrier_info: carrierInfo
@@ -77,7 +77,7 @@ export const sendSms = async (req: Request, res: Response): Promise<Response> =>
         messages.set(messageId, payload);
         // Immediately trigger callback if configured
         if (config.callback_url) {
-            const callbackData = {...payload, status: 'DELIVERED_TO_TERMINAL'};
+            const callbackData = {...payload, status: 'DELIVERED_TO_HANDSET'};
             sendCallbackWithRetry({
                     url: config.callback_url,
                     callBackData: callbackData,

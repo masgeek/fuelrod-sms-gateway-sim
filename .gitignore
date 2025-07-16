@@ -22,3 +22,10 @@ Thumbs.db
 # IDEs
 .vscode/
 .idea/
+
+#JEST
+coverage/
+
+*.log
+
+generated/

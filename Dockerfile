@@ -18,6 +18,9 @@ FROM node:22-alpine AS production
 
 WORKDIR /app
 
+# Install net-tools
+RUN apk add --no-cache net-tools bash curl
+
 # Copy only production dependencies
 COPY package.json yarn.lock ./
 

@@ -1,4 +1,4 @@
-export type SmsStatus = 'MESSAGE_SENT' | 'DELIVERED' | 'FAILED';
+export type SmsStatus = 'MESSAGE_SENT' | 'DELIVERED_TO_TERMINAL' | 'FAILED';
 
 /**
  * Represents an SMS message stored or being processed.

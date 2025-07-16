@@ -1,5 +1,5 @@
 import {Request, Response} from 'express';
-import {v4 as uuidv4} from 'uuid';
+import {ulid} from 'ulid';
 import {messages, sendCallbackWithRetry} from '../services/SmsService';
 import {config} from '../config/env';
 import {SmsMessage, SmsMessageResp} from '../models/SmsMessage';
@@ -38,12 +38,13 @@ export const sendSms = async (req: Request, res: Response): Promise<Response> =>
 
             return res.status(400).json({
                 error: 'Validation failed',
-                details: validationErrors
+                response_code: 400,
+                errors: validationErrors
             });
         }
 
         const {phone_number, message} = result.data;
-        const messageId = uuidv4();
+        const messageId = `FR_${ulid()}`
         const timestamp = new Date().toISOString();
 
         const carrierInfo = await enrichCarrierInfo(phone_number);
@@ -51,13 +52,19 @@ export const sendSms = async (req: Request, res: Response): Promise<Response> =>
             logger.warn(`⚠️ Could not enrich carrier info for ${phone_number}`);
         }
         const sms: SmsMessage = {
+            message_id: messageId,
             phone_number: phone_number,
             message: message,
             status: 'MESSAGE_SENT', // assume instant delivery
-            timestamp: timestamp
+            timestamp: timestamp,
+            network_code: carrierInfo?.network_code ?? 0,
         };
 
-        logger.info(`✅ SMS delivered instantly to ${phone_number} with ID ${messageId}`);
+        logger.debug(`✅ SMS delivered instantly`, {
+            message_id: messageId,
+            status: sms.status,
+            carrier_info: carrierInfo
+        });
 
         const payload: SmsMessageResp = {
             message_id: messageId,
@@ -70,7 +77,7 @@ export const sendSms = async (req: Request, res: Response): Promise<Response> =>
         messages.set(messageId, payload);
         // Immediately trigger callback if configured
         if (config.callback_url) {
-            const callbackData = {...payload}
+            const callbackData = {...payload, status: 'DELIVERED_TO_HANDSET'};
             sendCallbackWithRetry({
                     url: config.callback_url,
                     callBackData: callbackData,
@@ -132,6 +139,7 @@ export const getSmsStatus = async (req: Request, res: Response): Promise<Respons
                 message_id: messageId,
                 phone_number: record.phone_number,
                 status: record.status,
+                network_code: record.network_code,
                 ...(record.delivered_at && {delivered_at: record.delivered_at})
             }
         });

@@ -1,0 +1,12 @@
+node_modules
+
+build
+
+.dockerignore
+
+**/.git
+.env
+.env.local
+
+dist
+*.log

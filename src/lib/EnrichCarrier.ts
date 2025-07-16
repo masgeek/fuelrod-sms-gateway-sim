@@ -15,8 +15,9 @@ export interface CarrierInfo {
  * @returns CarrierInfo or null if lookup fails
  */
 export async function enrichCarrierInfo(phoneNumber: string): Promise<CarrierInfo | null> {
+    const url = `${config.fuelrod_api}/v1/map-network`
+
     try {
-        const url = `${config.fuelrod_api}/v1/map-network`
 
         logger.info(`Sending request to ${url} for ${phoneNumber}`);
 
@@ -31,9 +32,9 @@ export async function enrichCarrierInfo(phoneNumber: string): Promise<CarrierInf
         };
     } catch (error: any) {
         if (error.response) {
-            logger.error('API error:', error);
+            logger.error(`API error:  ${error} url ${url} response ${error.response.data} status ${error.response.status} headers ${error.response.headers}`);
         } else {
-            logger.error('Request error:', error.message);
+            logger.error(`Request error: ${error.message} url ${url}`);
         }
         return null;
     }

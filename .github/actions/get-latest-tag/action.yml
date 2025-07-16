@@ -1,0 +1,16 @@
+name: Get Latest Tag
+description: Get the latest semantic version tag
+
+outputs:
+  tag:
+    description: Latest semantic version tag
+    value: ${{ steps.get-tag.outputs.tag }}
+
+runs:
+  using: composite
+  steps:
+    - id: get-tag
+      shell: bash
+      run: |
+        LATEST_TAG=$(git tag -l | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
+        echo "tag=$LATEST_TAG" >> $GITHUB_OUTPUT

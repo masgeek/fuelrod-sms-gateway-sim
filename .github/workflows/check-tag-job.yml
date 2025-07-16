@@ -1,0 +1,83 @@
+name: BuildLatestTag
+
+on:
+  workflow_call:
+    inputs:
+      dockerfile:
+        required: true
+        type: string
+      image_name:
+        required: true
+        type: string
+      specific_tag:
+        required: false
+        type: string
+      force_rebuild:
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      docker_username:
+        required: true
+      docker_password:
+        required: true
+
+jobs:
+  check-and-build:
+    runs-on: ubuntu-24.04
+    concurrency:
+      cancel-in-progress: true
+      group: check-tag-${{ github.ref }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Get latest tag
+        if: inputs.specific_tag == ''
+        uses: ./.github/actions/get-latest-tag
+        id: latest-tag
+
+      - name: Set specific tag
+        if: inputs.specific_tag != ''
+        id: specific-tag
+        run: echo "tag=${{ inputs.specific_tag }}" >> $GITHUB_OUTPUT
+
+      - name: Set final tag
+        id: final-tag
+        run: |
+          TAG="${{ inputs.specific_tag != '' && inputs.specific_tag || steps.latest-tag.outputs.tag }}"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Check Docker image
+        if: inputs.force_rebuild != true && steps.final-tag.outputs.tag != ''
+        uses: ./.github/actions/check-docker-image
+        id: check-image
+        with:
+          image_name: ${{ inputs.image_name }}
+          tag: ${{ steps.final-tag.outputs.tag }}
+          username: ${{ secrets.docker_username }}
+          password: ${{ secrets.docker_password }}
+
+      - name: Docker login
+        if: steps.final-tag.outputs.tag != '' && (inputs.force_rebuild == true || steps.check-image.outputs.exists != 'true')
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.docker_username }}
+          password: ${{ secrets.docker_password }}
+
+      - name: Build and push
+        if: steps.final-tag.outputs.tag != '' && (inputs.force_rebuild == true || steps.check-image.outputs.exists != 'true')
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ inputs.dockerfile }}
+          push: true
+          tags: |
+            ${{ inputs.image_name }}:latest
+            ${{ inputs.image_name }}:${{ steps.final-tag.outputs.tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

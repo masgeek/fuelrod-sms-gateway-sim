@@ -77,7 +77,7 @@ export const sendSms = async (req: Request, res: Response): Promise<Response> =>
         messages.set(messageId, payload);
         // Immediately trigger callback if configured
         if (config.callback_url) {
-            const callbackData = {...payload}
+            const callbackData = {...payload, status: 'DELIVERED_TO_TERMINAL'};
             sendCallbackWithRetry({
                     url: config.callback_url,
                     callBackData: callbackData,

@@ -16,26 +16,26 @@ export interface CarrierInfo {
  */
 export async function enrichCarrierInfo(phoneNumber: string): Promise<CarrierInfo | null> {
     const url = `${config.fuelrod_api}/v1/map-network`
-
-    try {
-
-        logger.info(`Sending request to ${url} for ${phoneNumber}`);
-
-        const response = await axios.post(url, {phone_number: phoneNumber}, {timeout: 5000});
-
-        const data = response.data.data;
-
-        return {
-            country_code: data.country_code ?? null,
-            network_name: data.network_name ?? null,
-            network_code: data.network_code ?? 0,
-        };
-    } catch (error: any) {
-        if (error.response) {
-            logger.error(`API error:  ${error} url ${url} response ${error.response.data} status ${error.response.status} headers ${error.response.headers}`);
-        } else {
-            logger.error(`Request error: ${error.message} url ${url}`);
-        }
-        return null;
-    }
+    return null;
+    // try {
+    //
+    //     logger.info(`Sending request to ${url} for ${phoneNumber}`);
+    //
+    //     const response = await axios.post(url, {phone_number: phoneNumber}, {timeout: 5000});
+    //
+    //     const data = response.data.data;
+    //
+    //     return {
+    //         country_code: data.country_code ?? null,
+    //         network_name: data.network_name ?? null,
+    //         network_code: data.network_code ?? 0,
+    //     };
+    // } catch (error: any) {
+    //     if (error.response) {
+    //         logger.error(`API error:  ${error} url ${url} response ${error.response.data} status ${error.response.status} headers ${error.response.headers}`);
+    //     } else {
+    //         logger.error(`Request error: ${error.message} url ${url}`);
+    //     }
+    //     return null;
+    // }
 }

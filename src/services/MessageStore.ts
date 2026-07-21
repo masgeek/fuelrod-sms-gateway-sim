@@ -24,6 +24,72 @@ export interface FailedCallback {
     created_at: string;
 }
 
+const MIGRATIONS: Array<{version: number; up: (db: Database.Database) => void}> = [
+    {
+        version: 1,
+        up: (db) => {
+            db.exec(`
+                CREATE TABLE IF NOT EXISTS messages (
+                    message_id     TEXT PRIMARY KEY,
+                    phone_number   TEXT    NOT NULL,
+                    network_code   INTEGER NOT NULL DEFAULT 0,
+                    status         TEXT    NOT NULL,
+                    delivered_at   TEXT,
+                    created_at     TEXT    NOT NULL DEFAULT (datetime('now'))
+                )
+            `);
+            db.exec(`
+                CREATE TABLE IF NOT EXISTS failed_callbacks (
+                    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                    url          TEXT    NOT NULL,
+                    payload      TEXT    NOT NULL,
+                    attempts     INTEGER NOT NULL DEFAULT 0,
+                    max_attempts INTEGER NOT NULL DEFAULT 5,
+                    last_error   TEXT,
+                    next_retry   TEXT    NOT NULL,
+                    created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+                )
+            `);
+            db.exec(`
+                CREATE TABLE IF NOT EXISTS callback_queue (
+                    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                    url          TEXT    NOT NULL,
+                    fallback_url TEXT,
+                    payload      TEXT    NOT NULL,
+                    status       TEXT    NOT NULL DEFAULT 'pending',
+                    attempts     INTEGER NOT NULL DEFAULT 0,
+                    max_attempts INTEGER NOT NULL DEFAULT 3,
+                    last_error   TEXT,
+                    next_retry   TEXT    NOT NULL DEFAULT (datetime('now')),
+                    created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+                )
+            `);
+        }
+    },
+    {
+        version: 2,
+        up: (db) => {
+            // Add callback_status column for tracking callback processing
+            const hasCallbackStatus = db.prepare("SELECT name FROM pragma_table_info('messages') WHERE name = 'callback_status'").get();
+            if (!hasCallbackStatus) {
+                db.exec("ALTER TABLE messages ADD COLUMN callback_status TEXT NOT NULL DEFAULT 'pending'");
+                logger.info('Migration 2: Added callback_status column');
+            }
+        }
+    },
+    {
+        version: 3,
+        up: (db) => {
+            // Add deleted_at column for soft deletes
+            const hasDeletedAt = db.prepare("SELECT name FROM pragma_table_info('messages') WHERE name = 'deleted_at'").get();
+            if (!hasDeletedAt) {
+                db.exec("ALTER TABLE messages ADD COLUMN deleted_at TEXT");
+                logger.info('Migration 3: Added deleted_at column');
+            }
+        }
+    },
+];
+
 export class MessageStore {
     private db: Database.Database;
     private cleanupTimer: ReturnType<typeof setInterval> | null = null;
@@ -45,50 +111,35 @@ export class MessageStore {
         this.db.pragma('journal_mode = WAL');
         this.db.pragma('busy_timeout = 5000');
 
+        this.runMigrations();
+    }
+
+    private runMigrations(): void {
         this.db.exec(`
-            CREATE TABLE IF NOT EXISTS messages (
-                message_id     TEXT PRIMARY KEY,
-                phone_number   TEXT    NOT NULL,
-                network_code   INTEGER NOT NULL DEFAULT 0,
-                status         TEXT    NOT NULL,
-                callback_status TEXT   NOT NULL DEFAULT 'pending',
-                delivered_at   TEXT,
-                created_at     TEXT    NOT NULL DEFAULT (datetime('now'))
+            CREATE TABLE IF NOT EXISTS schema_migrations (
+                version INTEGER PRIMARY KEY,
+                applied_at TEXT NOT NULL DEFAULT (datetime('now'))
             )
         `);
 
-        this.db.exec(`
-            CREATE TABLE IF NOT EXISTS failed_callbacks (
-                id           INTEGER PRIMARY KEY AUTOINCREMENT,
-                url          TEXT    NOT NULL,
-                payload      TEXT    NOT NULL,
-                attempts     INTEGER NOT NULL DEFAULT 0,
-                max_attempts INTEGER NOT NULL DEFAULT 5,
-                last_error   TEXT,
-                next_retry   TEXT    NOT NULL,
-                created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
-            )
-        `);
+        const applied = new Set(
+            (this.db.prepare('SELECT version FROM schema_migrations').all() as any[]).map(r => r.version)
+        );
 
-        this.db.exec(`
-            CREATE TABLE IF NOT EXISTS callback_queue (
-                id           INTEGER PRIMARY KEY AUTOINCREMENT,
-                url          TEXT    NOT NULL,
-                fallback_url TEXT,
-                payload      TEXT    NOT NULL,
-                status       TEXT    NOT NULL DEFAULT 'pending',
-                attempts     INTEGER NOT NULL DEFAULT 0,
-                max_attempts INTEGER NOT NULL DEFAULT 3,
-                last_error   TEXT,
-                next_retry   TEXT    NOT NULL DEFAULT (datetime('now')),
-                created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
-            )
-        `);
+        for (const migration of MIGRATIONS) {
+            if (!applied.has(migration.version)) {
+                logger.info(`Running migration ${migration.version}`);
+                this.db.transaction(() => {
+                    migration.up(this.db);
+                    this.db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run(migration.version);
+                })();
+            }
+        }
     }
 
     startCleanup(intervalMs?: number): void {
         const ms = intervalMs ?? parseEnvInt(process.env.CLEANUP_INTERVAL_MS, DEFAULT_CLEANUP_INTERVAL_MS);
-        this.cleanupTimer = setInterval(() => this.evictExpired(), ms);
+        this.cleanupTimer = setInterval(() => this.softDeleteExpired(), ms);
         this.cleanupTimer.unref();
     }
 
@@ -101,7 +152,7 @@ export class MessageStore {
 
     get(key: string): SmsMessageResp | undefined {
         const row = this.db.prepare(
-            'SELECT message_id, phone_number, network_code, status, delivered_at FROM messages WHERE message_id = ?'
+            "SELECT message_id, phone_number, network_code, status, delivered_at FROM messages WHERE message_id = ? AND deleted_at IS NULL"
         ).get(key) as any;
 
         if (!row) return undefined;
@@ -123,17 +174,17 @@ export class MessageStore {
     }
 
     has(key: string): boolean {
-        const row = this.db.prepare('SELECT 1 FROM messages WHERE message_id = ?').get(key);
+        const row = this.db.prepare("SELECT 1 FROM messages WHERE message_id = ? AND deleted_at IS NULL").get(key);
         return row !== undefined;
     }
 
     clear(): void {
-        this.db.exec('DELETE FROM messages');
+        this.db.exec("UPDATE messages SET deleted_at = datetime('now') WHERE deleted_at IS NULL");
     }
 
     entries(): Array<[string, SmsMessageResp]> {
         const rows = this.db.prepare(
-            'SELECT message_id, phone_number, network_code, status, delivered_at FROM messages'
+            "SELECT message_id, phone_number, network_code, status, delivered_at FROM messages WHERE deleted_at IS NULL"
         ).all() as any[];
 
         return rows.map(row => [
@@ -149,17 +200,17 @@ export class MessageStore {
     }
 
     get size(): number {
-        const row = this.db.prepare('SELECT COUNT(*) as count FROM messages').get() as any;
+        const row = this.db.prepare("SELECT COUNT(*) as count FROM messages WHERE deleted_at IS NULL").get() as any;
         return row.count;
     }
 
-    evictExpired(): void {
+    softDeleteExpired(): void {
         const cutoff = new Date(Date.now() - this.ttlMs).toISOString();
         const result = this.db.prepare(
-            "DELETE FROM messages WHERE created_at < ? AND callback_status IN ('sent', 'failed')"
+            "UPDATE messages SET deleted_at = datetime('now') WHERE created_at < ? AND deleted_at IS NULL AND callback_status IN ('sent', 'failed')"
         ).run(cutoff);
         if (result.changes > 0) {
-            logger.info(`Evicted ${result.changes} expired messages (${this.size} remaining)`);
+            logger.info(`Soft-deleted ${result.changes} expired messages (${this.size} remaining)`);
         }
     }
 
@@ -241,18 +292,18 @@ export class MessageStore {
         return row.count;
     }
 
-    getAllMessages(limit = 100, offset = 0): any[] {
+    getAllMessages(limit = 20, offset = 0): any[] {
         return this.db.prepare(
-            'SELECT message_id, phone_number, network_code, status, delivered_at, created_at FROM messages ORDER BY created_at DESC LIMIT ? OFFSET ?'
+            "SELECT message_id, phone_number, network_code, status, callback_status, delivered_at, created_at FROM messages WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT ? OFFSET ?"
         ).all(limit, offset);
     }
 
     getMessageCount(): number {
-        const row = this.db.prepare('SELECT COUNT(*) as count FROM messages').get() as any;
+        const row = this.db.prepare("SELECT COUNT(*) as count FROM messages WHERE deleted_at IS NULL").get() as any;
         return row.count;
     }
 
-    getAllCallbackQueue(limit = 100, offset = 0): any[] {
+    getAllCallbackQueue(limit = 20, offset = 0): any[] {
         return this.db.prepare(
             "SELECT id, url, fallback_url, payload, status, attempts, max_attempts, last_error, next_retry, created_at FROM callback_queue ORDER BY created_at DESC LIMIT ? OFFSET ?"
         ).all(limit, offset);
@@ -263,7 +314,7 @@ export class MessageStore {
         return row.count;
     }
 
-    getAllFailedCallbacks(limit = 100, offset = 0): any[] {
+    getAllFailedCallbacks(limit = 20, offset = 0): any[] {
         return this.db.prepare(
             'SELECT id, url, payload, attempts, max_attempts, last_error, next_retry, created_at FROM failed_callbacks ORDER BY created_at DESC LIMIT ? OFFSET ?'
         ).all(limit, offset);

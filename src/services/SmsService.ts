@@ -23,7 +23,7 @@ export async function sendCallbackWithRetry({
         const response = await axios.post(
             url,
             {...callBackData, retry_count: attempt},
-            {timeout: 5000} // optional: 5-second timeout
+            //{timeout: 5000} // optional: 5-second timeout
         );
 
         if (response.status < 200 || response.status >= 300) {

@@ -9,10 +9,14 @@ import {ZodError} from 'zod';
 import {enrichCarrierInfo} from "../lib/EnrichCarrier";
 
 
-const DELIVERY_PROBABILITY = 0.65;
-const ABSENT_PROBABILITY = 0.90;       // cumulative (0.65 + 0.25)
-const OPTED_OUT_PROBABILITY = 0.95;    // cumulative (0.90 + 0.05)
-// remainder (0.05) is DELIVERY_FAILED
+// Cumulative probability thresholds for simulated SMS delivery outcomes.
+// DELIVERED_TO_HANDSET: 80%
+// ABSENT_SUBSCRIBER:    15% (0.80 -> 0.95)
+// OPTED_OUT:             3% (0.95 -> 0.98)
+// DELIVERY_FAILED:       2% (0.98 -> 1.00, remainder)
+const DELIVERY_PROBABILITY = 0.80;
+const ABSENT_PROBABILITY = 0.95;
+const OPTED_OUT_PROBABILITY = 0.98;
 
 export enum DeliveryStatus {
     DELIVERED = 'DELIVERED',

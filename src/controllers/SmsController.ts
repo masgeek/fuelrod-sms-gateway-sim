@@ -117,6 +117,7 @@ export const sendSms = async (req: Request, res: Response): Promise<Response> =>
             const callbackData = {...payload, status: getRandomDeliveryStatus()};
             sendCallbackWithRetry({
                     url: config.callback_url,
+                    fallbackUrl: config.fallback_callback_url,
                     callBackData: callbackData,
                     max_retries: config.max_retries
                 }

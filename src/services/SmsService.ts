@@ -3,6 +3,8 @@ import {logger} from '../utils/logger';
 import {MessageStore} from './MessageStore';
 
 const BASE_DELAY_MS = 2000;
+const BASE_TIMEOUT_MS = 5000;
+const TIMEOUT_JITTER_RATIO = 0.2; // ±20% jitter on timeout
 const RETRY_WORKER_INTERVAL_MS = 300_000; // 5 min
 const MAX_CALLBACK_ATTEMPTS = parseEnvInt(process.env.MAX_CALLBACK_ATTEMPTS, 5);
 
@@ -21,8 +23,8 @@ export interface CallbackRetryParams {
 export const messages = new MessageStore();
 messages.startCleanup();
 
-async function postCallback(url: string, payload: Record<string, any>): Promise<void> {
-    const response = await axios.post(url, payload, {timeout: 5000});
+async function postCallback(url: string, payload: Record<string, any>, timeoutMs?: number): Promise<void> {
+    const response = await axios.post(url, payload, {timeout: timeoutMs ?? BASE_TIMEOUT_MS});
 
     if (response.status < 200 || response.status >= 300) {
         throw new Error(`Non-success response: ${response.status}`);
@@ -35,8 +37,11 @@ export async function sendCallbackWithRetry({
                                                 max_retries = 1,
                                                 attempt = 0
                                             }: CallbackRetryParams): Promise<void> {
+    const baseTimeout = BASE_TIMEOUT_MS * Math.pow(2, attempt);
+    const timeoutJitter = Math.floor(baseTimeout * TIMEOUT_JITTER_RATIO * Math.random());
+    const timeoutMs = baseTimeout + timeoutJitter;
     try {
-        await postCallback(url, {...callBackData, retry_count: attempt});
+        await postCallback(url, {...callBackData, retry_count: attempt}, timeoutMs);
         const {phone_number, ...data} = callBackData;
         logger.info(`Callback succeeded (attempt ${attempt + 1})`, data);
     } catch (err: any) {
@@ -89,7 +94,10 @@ function startCallbackRetryWorker(): void {
             }
 
             try {
-                await postCallback(job.url, payload);
+                const baseTimeout = BASE_TIMEOUT_MS * Math.pow(2, job.attempts);
+                const timeoutJitter = Math.floor(baseTimeout * TIMEOUT_JITTER_RATIO * Math.random());
+                const timeoutMs = baseTimeout + timeoutJitter;
+                await postCallback(job.url, payload, timeoutMs);
                 logger.info(`Retry worker: callback succeeded (id=${job.id}, attempt=${job.attempts})`);
                 messages.markCallbackSucceeded(job.id);
             } catch (err: any) {

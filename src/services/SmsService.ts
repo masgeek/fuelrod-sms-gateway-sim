@@ -7,7 +7,7 @@ const BASE_TIMEOUT_MS = 5000;
 const TIMEOUT_JITTER_RATIO = 0.2; // ±20% jitter on timeout
 const RETRY_WORKER_INTERVAL_MS = 300_000; // 5 min
 const MAX_CALLBACK_ATTEMPTS = parseEnvInt(process.env.MAX_CALLBACK_ATTEMPTS, 5);
-const CALLBACK_RATE_LIMIT = parseEnvInt(process.env.CALLBACK_RATE_LIMIT, 15); // per minute
+const CALLBACK_RATE_LIMIT = parseEnvInt(process.env.CALLBACK_RATE_LIMIT, 100); // per minute
 
 function parseEnvInt(value: string | undefined, fallback: number): number {
     const n = Number(value);

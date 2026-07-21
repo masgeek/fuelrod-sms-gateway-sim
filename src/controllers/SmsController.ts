@@ -193,24 +193,84 @@ export const getSmsStatus = async (req: Request, res: Response): Promise<Respons
  */
 export const getAllSmsMessages = async (req: Request, res: Response): Promise<Response> => {
     try {
-        const allMessages = Array.from(messages.entries()).map(([id, message]) => ({
-            id,
-            ...message
-        }));
-
-        logger.info(`📊 Retrieved ${allMessages.length} SMS messages`);
+        const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 500);
+        const page = Math.max(Number(req.query.page) || 1, 1);
+        const offset = (page - 1) * limit;
+        const data = messages.getAllMessages(limit, offset);
+        const total = messages.getMessageCount();
+        const totalPages = Math.ceil(total / limit);
 
         return res.json({
             success: true,
-            data: allMessages,
-            total: allMessages.length
+            data,
+            pagination: {
+                total,
+                page,
+                limit,
+                totalPages,
+                hasMore: page < totalPages,
+            }
         });
-
     } catch (error) {
-        logger.error('❌ Unexpected error in getAllSmsMessages:', error);
-        return res.status(500).json({
-            error: 'Internal server error',
-            message: 'Failed to retrieve SMS messages'
+        logger.error('Error in getAllSmsMessages:', error);
+        return res.status(500).json({error: 'Internal server error'});
+    }
+};
+
+/**
+ * Get callback queue
+ */
+export const getCallbackQueue = async (req: Request, res: Response): Promise<Response> => {
+    try {
+        const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 500);
+        const page = Math.max(Number(req.query.page) || 1, 1);
+        const offset = (page - 1) * limit;
+        const data = messages.getAllCallbackQueue(limit, offset);
+        const total = messages.getCallbackQueueCount();
+        const totalPages = Math.ceil(total / limit);
+
+        return res.json({
+            success: true,
+            data,
+            pagination: {
+                total,
+                page,
+                limit,
+                totalPages,
+                hasMore: page < totalPages,
+            }
         });
+    } catch (error) {
+        logger.error('Error in getCallbackQueue:', error);
+        return res.status(500).json({error: 'Internal server error'});
+    }
+};
+
+/**
+ * Get failed callbacks
+ */
+export const getFailedCallbacks = async (req: Request, res: Response): Promise<Response> => {
+    try {
+        const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 500);
+        const page = Math.max(Number(req.query.page) || 1, 1);
+        const offset = (page - 1) * limit;
+        const data = messages.getAllFailedCallbacks(limit, offset);
+        const total = messages.getFailedCallbackCount();
+        const totalPages = Math.ceil(total / limit);
+
+        return res.json({
+            success: true,
+            data,
+            pagination: {
+                total,
+                page,
+                limit,
+                totalPages,
+                hasMore: page < totalPages,
+            }
+        });
+    } catch (error) {
+        logger.error('Error in getFailedCallbacks:', error);
+        return res.status(500).json({error: 'Internal server error'});
     }
 };

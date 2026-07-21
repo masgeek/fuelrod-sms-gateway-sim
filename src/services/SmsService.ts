@@ -23,16 +23,26 @@ export async function sendCallbackWithRetry({
         const response = await axios.post(
             url,
             {...callBackData, retry_count: attempt},
-            {timeout: 5000} // optional: 5-second timeout
+            //{timeout: 5000} // optional: 5-second timeout
         );
 
         if (response.status < 200 || response.status >= 300) {
             throw new Error(`Non-success response: ${response.status}`);
         }
 
-        logger.info(`✅ Callback succeeded (attempt ${attempt + 1})`, response.data);
+        const {phone_number, ...data} = response.data;
+        logger.info(`✅ Callback succeeded (attempt ${attempt + 1})`, data);
     } catch (err: any) {
-        logger.warn(`⚠️ Callback attempt ${attempt + 1} failed: ${err.message}`);
+        logger.warn(
+            `⚠️ Callback attempt ${attempt + 1} failed: ${err.message}`,
+            {
+                attempt: attempt + 1,
+                maxRetries: max_retries,
+                url,
+                callBackDataSummary: JSON.stringify(callBackData).slice(0, 200), // truncate for readability
+                stack: err.stack
+            }
+        );
 
         if (attempt < max_retries - 1) {
             // Exponential backoff with jitter
@@ -40,18 +50,30 @@ export async function sendCallbackWithRetry({
             const jitter = Math.floor(Math.random() * BASE_DELAY_MS);
             const delay = baseDelay + jitter;
 
-            logger.info(`⏳ Retrying callback in ${delay}ms (attempt ${attempt + 2}/${max_retries})`);
+            logger.info(
+                `⏳ Retrying callback in ${delay}ms (attempt ${attempt + 2}/${max_retries})`,
+                {delay, nextAttempt: attempt + 2}
+            );
 
             await new Promise(resolve => setTimeout(resolve, delay));
 
             await sendCallbackWithRetry({
-                url: url,
-                callBackData: callBackData,
-                max_retries: max_retries,
+                url,
+                callBackData,
+                max_retries,
                 attempt: attempt + 1
             });
         } else {
-            logger.error(`❌ Callback failed after ${max_retries} attempts.`);
+            logger.error(
+                `❌ Callback failed after ${max_retries} attempts.`,
+                {
+                    finalAttempt: attempt + 1,
+                    url,
+                    callBackDataSummary: JSON.stringify(callBackData).slice(0, 200),
+                    lastError: err.message,
+                    stack: err.stack
+                }
+            );
         }
     }
 }

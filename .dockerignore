@@ -1,12 +1,17 @@
 node_modules
-
+dist
 build
+coverage
+logs
 
-.dockerignore
+.git
+.idea
+.vscode
 
-**/.git
 .env
 .env.local
+.env.*
 
-dist
 *.log
+*.md
+docker-compose.yml

@@ -8,6 +8,37 @@ import {logger} from '../utils/logger';
 import {ZodError} from 'zod';
 import {enrichCarrierInfo} from "../lib/EnrichCarrier";
 
+
+const DELIVERY_PROBABILITY = 0.65;
+const ABSENT_PROBABILITY = 0.90;       // cumulative (0.65 + 0.25)
+const OPTED_OUT_PROBABILITY = 0.95;    // cumulative (0.90 + 0.05)
+// remainder (0.05) is DELIVERY_FAILED
+
+export enum DeliveryStatus {
+    DELIVERED_TO_HANDSET = 'DELIVERED_TO_HANDSET',
+    ABSENT_SUBSCRIBER = 'ABSENT_SUBSCRIBER',
+    OPTED_OUT = 'OPTED_OUT',
+    DELIVERY_FAILED = 'DELIVERY_FAILED'
+}
+
+export function getRandomDeliveryStatus(): DeliveryStatus {
+    const random = Math.random();
+
+    if (random < DELIVERY_PROBABILITY) {
+        return DeliveryStatus.DELIVERED_TO_HANDSET;
+    }
+
+    if (random < ABSENT_PROBABILITY) {
+        return DeliveryStatus.ABSENT_SUBSCRIBER;
+    }
+
+    if (random < OPTED_OUT_PROBABILITY) {
+        return DeliveryStatus.OPTED_OUT;
+    }
+
+    return DeliveryStatus.DELIVERY_FAILED;
+}
+
 /**
  * Formats Zod validation errors for better readability
  */
@@ -77,7 +108,9 @@ export const sendSms = async (req: Request, res: Response): Promise<Response> =>
         messages.set(messageId, payload);
         // Immediately trigger callback if configured
         if (config.callback_url) {
-            const callbackData = {...payload, status: 'DELIVERED_TO_HANDSET'};
+
+
+            const callbackData = {...payload, status: getRandomDeliveryStatus()};
             sendCallbackWithRetry({
                     url: config.callback_url,
                     callBackData: callbackData,

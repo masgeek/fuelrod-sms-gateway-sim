@@ -1,46 +1,44 @@
-# Stage 1: Build with Yarn
-FROM node:22-alpine AS builder
+# syntax=docker/dockerfile:1
 
+# ── Stage 1: Build ──────────────────────────────────────────────────
+FROM node:24-alpine AS builder
 WORKDIR /app
 
-# Install dependencies
-COPY package.json yarn.lock ./
-RUN yarn install --frozen-lockfile
+RUN corepack enable
 
-# Copy source and build
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+
+RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile
+
 COPY . .
+RUN pnpm build
+RUN pnpm prune --prod
 
-RUN yarn build
 
+# ── Stage 2: Runtime ────────────────────────────────────────────────
+FROM node:24-alpine AS runtime
 
-# Stage 2: Production runtime
-FROM node:22-alpine AS production
+ENV NODE_ENV=production
+
+RUN apk add --no-cache curl dumb-init \
+    && addgroup -S app && adduser -S app -G app
 
 WORKDIR /app
 
-# Install net-tools
-RUN apk add --no-cache net-tools bash curl
+COPY --from=builder --chown=app:app /app/node_modules ./node_modules
+COPY --from=builder --chown=app:app /app/package.json ./
+COPY --from=builder --chown=app:app /app/dist ./dist
+COPY --from=builder --chown=app:app /app/ecosystem.config.js ./
 
-# Copy only production dependencies
-COPY package.json yarn.lock ./
+RUN mkdir -p logs && chown app:app logs
 
-RUN yarn install --frozen-lockfile --prod
+USER app
 
-RUN yarn global add pm2
-
-# Copy built output and env files
-COPY --from=builder /app/dist ./dist
-
-# Copy any necessary runtime files (e.g., views, assets if needed)
-#COPY .env.production ./
-COPY ecosystem.config.js ./
-
-
-# Expose the API port
 EXPOSE 3000
 
-# Start the app
-#CMD ["node", "dist/index.js"]
-#CMD ["yarn", "pm2-runtime", "ecosystem.config.js"]
-CMD ["pm2-runtime", "ecosystem.config.js"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:3000/api/health || exit 1
 
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["npx", "pm2-runtime", "ecosystem.config.js"]

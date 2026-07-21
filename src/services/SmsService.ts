@@ -2,33 +2,15 @@ import axios from 'axios';
 import {logger} from '../utils/logger';
 import {MessageStore} from './MessageStore';
 
-const BASE_DELAY_MS = 2000;
 const BASE_TIMEOUT_MS = 5000;
-const TIMEOUT_JITTER_RATIO = 0.2; // ±20% jitter on timeout
-const RETRY_WORKER_INTERVAL_MS = 300_000; // 5 min
-const MAX_CALLBACK_ATTEMPTS = parseEnvInt(process.env.MAX_CALLBACK_ATTEMPTS, 5);
-const CALLBACK_RATE_LIMIT = parseEnvInt(process.env.CALLBACK_RATE_LIMIT, 100); // per minute
+const TIMEOUT_JITTER_RATIO = 0.2;
+const CALLBACK_BATCH_SIZE = parseEnvInt(process.env.CALLBACK_BATCH_SIZE, 500);
+const CALLBACK_INTERVAL_MS = parseEnvInt(process.env.CALLBACK_INTERVAL_MS, 300_000); // 5 min
+const MAX_CALLBACK_ATTEMPTS = parseEnvInt(process.env.MAX_CALLBACK_ATTEMPTS, 3);
 
 function parseEnvInt(value: string | undefined, fallback: number): number {
     const n = Number(value);
     return Number.isFinite(n) ? n : fallback;
-}
-
-let callbackCount = 0;
-let windowResetsAt = Date.now() + 60_000;
-
-async function throttle(): Promise<void> {
-    while (Date.now() >= windowResetsAt) {
-        callbackCount = 0;
-        windowResetsAt = Date.now() + 60_000;
-    }
-    if (callbackCount >= CALLBACK_RATE_LIMIT) {
-        logger.warn(`Callback rate limit reached (${CALLBACK_RATE_LIMIT}/min) — waiting`);
-    }
-    while (callbackCount >= CALLBACK_RATE_LIMIT) {
-        await new Promise(r => setTimeout(r, 100));
-    }
-    callbackCount++;
 }
 
 export interface CallbackRetryParams {
@@ -61,7 +43,6 @@ export async function sendCallbackWithRetry({
     const timeoutJitter = Math.floor(baseTimeout * TIMEOUT_JITTER_RATIO * Math.random());
     const timeoutMs = baseTimeout + timeoutJitter;
     try {
-        await throttle();
         await postCallback(url, {...callBackData, retry_count: attempt}, timeoutMs);
         const {phone_number, ...data} = callBackData;
         logger.info(`Callback succeeded on ${url} (attempt ${attempt + 1})`, data);
@@ -77,8 +58,8 @@ export async function sendCallbackWithRetry({
         );
 
         if (attempt < max_retries - 1) {
-            const baseDelay = BASE_DELAY_MS * Math.pow(2, attempt);
-            const jitter = Math.floor(Math.random() * BASE_DELAY_MS);
+            const baseDelay = 2000 * Math.pow(2, attempt);
+            const jitter = Math.floor(Math.random() * 2000);
             const delay = baseDelay + jitter;
 
             await new Promise(resolve => setTimeout(resolve, delay));
@@ -100,57 +81,60 @@ export async function sendCallbackWithRetry({
             });
         } else {
             logger.error(
-                `Callback failed after ${max_retries} attempts — enqueueing for retry`,
+                `Callback failed after ${max_retries} attempts`,
                 {url, lastError: err.message}
             );
-
-            messages.enqueueFailedCallback(url, callBackData, err.message, MAX_CALLBACK_ATTEMPTS);
         }
     }
 }
 
-function startCallbackRetryWorker(): void {
+function startCallbackWorker(): void {
+    const CONCURRENCY = parseEnvInt(process.env.CALLBACK_CONCURRENCY, 10);
+
     const timer = setInterval(async () => {
-        const pending = messages.dequeuePendingCallbacks(10);
+        const batch = messages.dequeuePendingCallbacksBatch(CALLBACK_BATCH_SIZE);
+        if (batch.length === 0) return;
 
-        for (const job of pending) {
-            let payload: Record<string, any>;
-            try {
-                payload = JSON.parse(job.payload);
-            } catch {
-                logger.error(`Corrupt callback payload (id=${job.id}) — discarding`);
-                messages.markCallbackAbandoned(job.id);
-                continue;
-            }
+        logger.info(`Callback worker: processing ${batch.length} callbacks (concurrency=${CONCURRENCY})`);
 
-            try {
-                const baseTimeout = BASE_TIMEOUT_MS * Math.pow(2, job.attempts);
-                const timeoutJitter = Math.floor(baseTimeout * TIMEOUT_JITTER_RATIO * Math.random());
-                const timeoutMs = baseTimeout + timeoutJitter;
-                await throttle();
-                await postCallback(job.url, payload, timeoutMs);
-                logger.info(`Retry worker: callback succeeded (id=${job.id}, attempt=${job.attempts})`);
-                messages.markCallbackSucceeded(job.id);
-            } catch (err: any) {
-                if (job.attempts >= job.max_attempts) {
-                    logger.error(
-                        `Retry worker: callback permanently failed after ${job.attempts} attempts (id=${job.id}) — discarding`,
-                        {url: job.url, lastError: err.message}
-                    );
-                    messages.markCallbackAbandoned(job.id);
-                } else {
-                    const delay = BASE_DELAY_MS * Math.pow(2, job.attempts);
-                    logger.warn(
-                        `Retry worker: callback failed (id=${job.id}, attempt=${job.attempts}/${job.max_attempts}) — retrying in ${delay}ms`,
-                        {url: job.url, lastError: err.message}
-                    );
-                    messages.markCallbackRetry(job.id, job.attempts, delay, err.message);
+        let idx = 0;
+        async function processNext(): Promise<void> {
+            while (idx < batch.length) {
+                const job = batch[idx++];
+                let payload: Record<string, any>;
+                try {
+                    payload = JSON.parse(job.payload);
+                } catch {
+                    logger.error(`Corrupt callback payload (id=${job.id}) — discarding`);
+                    messages.markCallbackQueueFailed(job.id);
+                    continue;
+                }
+
+                const targetUrl = job.attempts === 0 ? job.url : (job.fallback_url ?? job.url);
+                const timeoutMs = BASE_TIMEOUT_MS * Math.pow(2, job.attempts);
+
+                try {
+                    await postCallback(targetUrl, payload, timeoutMs);
+                    logger.info(`Callback worker: success (id=${job.id}, url=${targetUrl})`);
+                    messages.markCallbackQueueSuccess(job.id);
+                } catch (err: any) {
+                    if (job.attempts >= job.max_attempts) {
+                        logger.error(`Callback worker: permanently failed (id=${job.id})`, {lastError: err.message});
+                        messages.markCallbackQueueFailed(job.id);
+                    } else {
+                        const delay = 2000 * Math.pow(2, job.attempts);
+                        logger.warn(`Callback worker: retry (id=${job.id}, attempt=${job.attempts + 1}/${job.max_attempts})`, {lastError: err.message});
+                        messages.markCallbackQueueRetry(job.id, job.attempts + 1, delay, err.message);
+                    }
                 }
             }
         }
-    }, RETRY_WORKER_INTERVAL_MS);
+
+        const workers = Array.from({length: Math.min(CONCURRENCY, batch.length)}, () => processNext());
+        await Promise.all(workers);
+    }, CALLBACK_INTERVAL_MS);
 
     timer.unref();
 }
 
-startCallbackRetryWorker();
+startCallbackWorker();

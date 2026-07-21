@@ -68,6 +68,21 @@ export class MessageStore {
                 created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
             )
         `);
+
+        this.db.exec(`
+            CREATE TABLE IF NOT EXISTS callback_queue (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                url          TEXT    NOT NULL,
+                fallback_url TEXT,
+                payload      TEXT    NOT NULL,
+                status       TEXT    NOT NULL DEFAULT 'pending',
+                attempts     INTEGER NOT NULL DEFAULT 0,
+                max_attempts INTEGER NOT NULL DEFAULT 3,
+                last_error   TEXT,
+                next_retry   TEXT    NOT NULL DEFAULT (datetime('now')),
+                created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+            )
+        `);
     }
 
     startCleanup(intervalMs?: number): void {
@@ -179,6 +194,43 @@ export class MessageStore {
 
     get pendingCallbackCount(): number {
         const row = this.db.prepare('SELECT COUNT(*) as count FROM failed_callbacks').get() as any;
+        return row.count;
+    }
+
+    enqueueCallback(url: string, fallbackUrl: string | undefined, payload: Record<string, any>, maxAttempts = 3): number {
+        const result = this.db.prepare(`
+            INSERT INTO callback_queue (url, fallback_url, payload, max_attempts)
+            VALUES (?, ?, ?, ?)
+        `).run(url, fallbackUrl ?? null, JSON.stringify(payload), maxAttempts);
+        return Number(result.lastInsertRowid);
+    }
+
+    dequeuePendingCallbacksBatch(limit = 100): Array<{id: number; url: string; fallback_url: string | null; payload: string; attempts: number; max_attempts: number}> {
+        return this.db.prepare(`
+            SELECT id, url, fallback_url, payload, attempts, max_attempts FROM callback_queue
+            WHERE status = 'pending' AND next_retry <= datetime('now')
+            ORDER BY created_at ASC
+            LIMIT ?
+        `).all(limit) as any[];
+    }
+
+    markCallbackQueueSuccess(id: number): void {
+        this.db.prepare("UPDATE callback_queue SET status = 'sent' WHERE id = ?").run(id);
+    }
+
+    markCallbackQueueRetry(id: number, attempt: number, nextDelayMs: number, lastError: string): void {
+        const nextRetry = new Date(Date.now() + nextDelayMs).toISOString();
+        this.db.prepare(`
+            UPDATE callback_queue SET attempts = ?, next_retry = ?, last_error = ? WHERE id = ?
+        `).run(attempt, nextRetry, lastError, id);
+    }
+
+    markCallbackQueueFailed(id: number): void {
+        this.db.prepare("UPDATE callback_queue SET status = 'failed' WHERE id = ?").run(id);
+    }
+
+    get callbackQueueSize(): number {
+        const row = this.db.prepare("SELECT COUNT(*) as count FROM callback_queue WHERE status = 'pending'").get() as any;
         return row.count;
     }
 

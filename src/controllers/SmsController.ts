@@ -1,6 +1,6 @@
 import {Request, Response} from 'express';
 import {ulid} from 'ulid';
-import {messages, sendCallbackWithRetry} from '../services/SmsService';
+import {messages} from '../services/SmsService';
 import {config} from '../config/env';
 import {SmsMessage, SmsMessageResp} from '../models/SmsMessage';
 import {sendSmsSchema, getSmsStatusSchema, sendSmsSchemaStrict} from '../validators/SmsValidator';
@@ -110,20 +110,16 @@ export const sendSms = async (req: Request, res: Response): Promise<Response> =>
         };
 
         messages.set(messageId, payload);
-        // Immediately trigger callback if configured
+        // Enqueue callback for batch processing
         if (config.callback_url) {
-
-
             const callbackData = {...payload, status: getRandomDeliveryStatus()};
-            sendCallbackWithRetry({
-                    url: config.callback_url,
-                    fallbackUrl: config.fallback_callback_url,
-                    callBackData: callbackData,
-                    max_retries: config.max_retries
-                }
-            ).catch(error => {
-                logger.error(`Failed to send callback for ${messageId}:`, error);
-            });
+            messages.enqueueCallback(
+                config.callback_url,
+                config.fallback_callback_url,
+                callbackData,
+                config.max_retries
+            );
+            logger.info(`Callback enqueued for ${messageId}`);
         }
 
         return res.status(202).json({

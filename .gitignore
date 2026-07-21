@@ -29,3 +29,6 @@ coverage/
 *.log
 
 generated/
+
+# SQLite
+data/

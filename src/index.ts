@@ -1,7 +1,23 @@
 import {config} from './config/env'
 import app from './app'
+import {logger} from './utils/logger'
 
-app.listen(config.port, () => {
-    console.log(`🚀 Running at http://127.0.0.1:${config.port}/api/v1 [${config.env}]`);
+const server = app.listen(config.port, () => {
+    logger.info(`Running at http://127.0.0.1:${config.port}/api/v1 [${config.env}]`);
 });
+
+function shutdown(signal: string) {
+    logger.info(`${signal} received — shutting down`);
+    server.close(() => {
+        logger.info('HTTP server closed');
+        process.exit(0);
+    });
+    setTimeout(() => {
+        logger.error('Forced shutdown after timeout');
+        process.exit(1);
+    }, 10_000);
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 

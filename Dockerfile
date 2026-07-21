@@ -4,7 +4,8 @@
 FROM node:24-alpine AS builder
 WORKDIR /app
 
-RUN corepack enable
+RUN corepack enable \
+    && apk add --no-cache python3 make g++
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
@@ -31,7 +32,8 @@ COPY --from=builder --chown=app:app /app/package.json ./
 COPY --from=builder --chown=app:app /app/dist ./dist
 COPY --from=builder --chown=app:app /app/ecosystem.config.js ./
 
-RUN mkdir -p logs && chown app:app logs
+RUN mkdir -p data logs \
+    && chown app:app data logs
 
 USER app
 

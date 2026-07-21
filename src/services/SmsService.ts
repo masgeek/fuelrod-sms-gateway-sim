@@ -117,10 +117,16 @@ function startCallbackWorker(): void {
                     await postCallback(targetUrl, payload, timeoutMs);
                     logger.info(`Callback worker: success (id=${job.id}, url=${targetUrl})`);
                     messages.markCallbackQueueSuccess(job.id);
+                    if (payload.message_id) {
+                        messages.markCallbackStatus(payload.message_id, 'sent');
+                    }
                 } catch (err: any) {
                     if (job.attempts >= job.max_attempts) {
                         logger.error(`Callback worker: permanently failed (id=${job.id})`, {lastError: err.message});
                         messages.markCallbackQueueFailed(job.id);
+                        if (payload.message_id) {
+                            messages.markCallbackStatus(payload.message_id, 'failed');
+                        }
                     } else {
                         const delay = 2000 * Math.pow(2, job.attempts);
                         logger.warn(`Callback worker: retry (id=${job.id}, attempt=${job.attempts + 1}/${job.max_attempts})`, {lastError: err.message});

@@ -47,12 +47,13 @@ export class MessageStore {
 
         this.db.exec(`
             CREATE TABLE IF NOT EXISTS messages (
-                message_id   TEXT PRIMARY KEY,
-                phone_number TEXT    NOT NULL,
-                network_code INTEGER NOT NULL DEFAULT 0,
-                status       TEXT    NOT NULL,
-                delivered_at TEXT,
-                created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+                message_id     TEXT PRIMARY KEY,
+                phone_number   TEXT    NOT NULL,
+                network_code   INTEGER NOT NULL DEFAULT 0,
+                status         TEXT    NOT NULL,
+                callback_status TEXT   NOT NULL DEFAULT 'pending',
+                delivered_at   TEXT,
+                created_at     TEXT    NOT NULL DEFAULT (datetime('now'))
             )
         `);
 
@@ -154,10 +155,16 @@ export class MessageStore {
 
     evictExpired(): void {
         const cutoff = new Date(Date.now() - this.ttlMs).toISOString();
-        const result = this.db.prepare('DELETE FROM messages WHERE created_at < ?').run(cutoff);
+        const result = this.db.prepare(
+            "DELETE FROM messages WHERE created_at < ? AND callback_status IN ('sent', 'failed')"
+        ).run(cutoff);
         if (result.changes > 0) {
             logger.info(`Evicted ${result.changes} expired messages (${this.size} remaining)`);
         }
+    }
+
+    markCallbackStatus(messageId: string, status: 'sent' | 'failed'): void {
+        this.db.prepare('UPDATE messages SET callback_status = ? WHERE message_id = ?').run(status, messageId);
     }
 
     enqueueFailedCallback(url: string, payload: Record<string, any>, lastError: string, maxAttempts = 5): number {
@@ -231,6 +238,39 @@ export class MessageStore {
 
     get callbackQueueSize(): number {
         const row = this.db.prepare("SELECT COUNT(*) as count FROM callback_queue WHERE status = 'pending'").get() as any;
+        return row.count;
+    }
+
+    getAllMessages(limit = 100, offset = 0): any[] {
+        return this.db.prepare(
+            'SELECT message_id, phone_number, network_code, status, delivered_at, created_at FROM messages ORDER BY created_at DESC LIMIT ? OFFSET ?'
+        ).all(limit, offset);
+    }
+
+    getMessageCount(): number {
+        const row = this.db.prepare('SELECT COUNT(*) as count FROM messages').get() as any;
+        return row.count;
+    }
+
+    getAllCallbackQueue(limit = 100, offset = 0): any[] {
+        return this.db.prepare(
+            "SELECT id, url, fallback_url, payload, status, attempts, max_attempts, last_error, next_retry, created_at FROM callback_queue ORDER BY created_at DESC LIMIT ? OFFSET ?"
+        ).all(limit, offset);
+    }
+
+    getCallbackQueueCount(): number {
+        const row = this.db.prepare('SELECT COUNT(*) as count FROM callback_queue').get() as any;
+        return row.count;
+    }
+
+    getAllFailedCallbacks(limit = 100, offset = 0): any[] {
+        return this.db.prepare(
+            'SELECT id, url, payload, attempts, max_attempts, last_error, next_retry, created_at FROM failed_callbacks ORDER BY created_at DESC LIMIT ? OFFSET ?'
+        ).all(limit, offset);
+    }
+
+    getFailedCallbackCount(): number {
+        const row = this.db.prepare('SELECT COUNT(*) as count FROM failed_callbacks').get() as any;
         return row.count;
     }
 

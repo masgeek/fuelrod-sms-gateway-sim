@@ -1,13 +1,13 @@
 import express, {Request, Response, NextFunction} from 'express';
 import smsRoutes from './routes/SmsRoutes';
 import {logger} from './utils/logger';
-import {rateLimiter} from './middleware/rateLimiter';
+// import {rateLimiter} from './middleware/rateLimiter';
 import {mountDocs} from './docs/swagger';
 
 
 const app = express();
 
-app.use(rateLimiter);
+// app.use(rateLimiter);
 app.use(express.json({limit: '100kb'}));
 
 // Request logging

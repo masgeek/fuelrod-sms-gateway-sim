@@ -15,6 +15,7 @@ function parseEnvInt(value: string | undefined, fallback: number): number {
 
 export interface CallbackRetryParams {
     url: string;
+    fallbackUrl?: string;
     callBackData: Record<string, any>;
     max_retries?: number;
     attempt?: number;
@@ -33,6 +34,7 @@ async function postCallback(url: string, payload: Record<string, any>, timeoutMs
 
 export async function sendCallbackWithRetry({
                                                 url,
+                                                fallbackUrl,
                                                 callBackData,
                                                 max_retries = 1,
                                                 attempt = 0
@@ -43,10 +45,10 @@ export async function sendCallbackWithRetry({
     try {
         await postCallback(url, {...callBackData, retry_count: attempt}, timeoutMs);
         const {phone_number, ...data} = callBackData;
-        logger.info(`Callback succeeded (attempt ${attempt + 1})`, data);
+        logger.info(`Callback succeeded on ${url} (attempt ${attempt + 1})`, data);
     } catch (err: any) {
         logger.warn(
-            `Callback attempt ${attempt + 1} failed: ${err.message}`,
+            `Callback attempt ${attempt + 1} failed on ${url}: ${err.message}`,
             {
                 attempt: attempt + 1,
                 maxRetries: max_retries,
@@ -64,9 +66,18 @@ export async function sendCallbackWithRetry({
 
             await sendCallbackWithRetry({
                 url,
+                fallbackUrl,
                 callBackData,
                 max_retries,
                 attempt: attempt + 1
+            });
+        } else if (fallbackUrl) {
+            logger.warn(`Primary ${url} exhausted — trying fallback ${fallbackUrl}`);
+            await sendCallbackWithRetry({
+                url: fallbackUrl,
+                callBackData,
+                max_retries,
+                attempt: 0
             });
         } else {
             logger.error(

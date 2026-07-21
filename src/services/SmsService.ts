@@ -7,10 +7,28 @@ const BASE_TIMEOUT_MS = 5000;
 const TIMEOUT_JITTER_RATIO = 0.2; // ±20% jitter on timeout
 const RETRY_WORKER_INTERVAL_MS = 300_000; // 5 min
 const MAX_CALLBACK_ATTEMPTS = parseEnvInt(process.env.MAX_CALLBACK_ATTEMPTS, 5);
+const CALLBACK_RATE_LIMIT = parseEnvInt(process.env.CALLBACK_RATE_LIMIT, 15); // per minute
 
 function parseEnvInt(value: string | undefined, fallback: number): number {
     const n = Number(value);
     return Number.isFinite(n) ? n : fallback;
+}
+
+let callbackCount = 0;
+let windowResetsAt = Date.now() + 60_000;
+
+async function throttle(): Promise<void> {
+    while (Date.now() >= windowResetsAt) {
+        callbackCount = 0;
+        windowResetsAt = Date.now() + 60_000;
+    }
+    if (callbackCount >= CALLBACK_RATE_LIMIT) {
+        logger.warn(`Callback rate limit reached (${CALLBACK_RATE_LIMIT}/min) — waiting`);
+    }
+    while (callbackCount >= CALLBACK_RATE_LIMIT) {
+        await new Promise(r => setTimeout(r, 100));
+    }
+    callbackCount++;
 }
 
 export interface CallbackRetryParams {
@@ -43,6 +61,7 @@ export async function sendCallbackWithRetry({
     const timeoutJitter = Math.floor(baseTimeout * TIMEOUT_JITTER_RATIO * Math.random());
     const timeoutMs = baseTimeout + timeoutJitter;
     try {
+        await throttle();
         await postCallback(url, {...callBackData, retry_count: attempt}, timeoutMs);
         const {phone_number, ...data} = callBackData;
         logger.info(`Callback succeeded on ${url} (attempt ${attempt + 1})`, data);
@@ -108,6 +127,7 @@ function startCallbackRetryWorker(): void {
                 const baseTimeout = BASE_TIMEOUT_MS * Math.pow(2, job.attempts);
                 const timeoutJitter = Math.floor(baseTimeout * TIMEOUT_JITTER_RATIO * Math.random());
                 const timeoutMs = baseTimeout + timeoutJitter;
+                await throttle();
                 await postCallback(job.url, payload, timeoutMs);
                 logger.info(`Retry worker: callback succeeded (id=${job.id}, attempt=${job.attempts})`);
                 messages.markCallbackSucceeded(job.id);

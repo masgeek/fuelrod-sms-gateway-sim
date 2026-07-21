@@ -15,7 +15,7 @@ const OPTED_OUT_PROBABILITY = 0.95;    // cumulative (0.90 + 0.05)
 // remainder (0.05) is DELIVERY_FAILED
 
 export enum DeliveryStatus {
-    DELIVERED_TO_HANDSET = 'DELIVERED_TO_HANDSET',
+    DELIVERED = 'DELIVERED',
     ABSENT_SUBSCRIBER = 'ABSENT_SUBSCRIBER',
     OPTED_OUT = 'OPTED_OUT',
     DELIVERY_FAILED = 'DELIVERY_FAILED'
@@ -25,7 +25,7 @@ export function getRandomDeliveryStatus(): DeliveryStatus {
     const random = Math.random();
 
     if (random < DELIVERY_PROBABILITY) {
-        return DeliveryStatus.DELIVERED_TO_HANDSET;
+        return DeliveryStatus.DELIVERED;
     }
 
     if (random < ABSENT_PROBABILITY) {

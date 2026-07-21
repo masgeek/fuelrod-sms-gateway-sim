@@ -32,7 +32,8 @@ RUN corepack enable
 COPY package.json pnpm-lock.yaml ./
 
 # Install ONLY production deps
-RUN pnpm install --frozen-lockfile --prod
+#RUN pnpm install --frozen-lockfile --prod
+RUN pnpm install --prod
 
 # Install pm2 locally (not global)
 RUN pnpm add pm2

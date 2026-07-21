@@ -19,3 +19,5 @@ services:
 
 volumes:
   sms-data:
+    driver: local
+    name: sms-data

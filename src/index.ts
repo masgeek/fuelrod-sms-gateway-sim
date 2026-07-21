@@ -1,9 +1,10 @@
 import {config} from './config/env'
 import app from './app'
 import {logger} from './utils/logger'
+import {version} from '../package.json'
 
 const server = app.listen(config.port, () => {
-    logger.info(`Running at http://127.0.0.1:${config.port}/api/v1 [${config.env}]`);
+    logger.info(`Running at http://127.0.0.1:${config.port}/api/v1 [${config.env}] v${version}`);
 });
 
 function shutdown(signal: string) {

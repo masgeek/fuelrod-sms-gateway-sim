@@ -141,7 +141,8 @@ export const sendSms = async (req: Request, res: Response): Promise<Response> =>
  */
 export const getSmsStatus = async (req: Request, res: Response): Promise<Response> => {
     try {
-        const paramValidation = getSmsStatusSchema.safeParse({messageId: req.params.messageId});
+        const rawMessageId = String(req.params.messageId).replace(/^FR_/, '');
+        const paramValidation = getSmsStatusSchema.safeParse({messageId: rawMessageId});
 
         if (!paramValidation.success) {
             const validationErrors = formatValidationErrors(paramValidation.error);
@@ -153,7 +154,7 @@ export const getSmsStatus = async (req: Request, res: Response): Promise<Respons
             });
         }
 
-        const {messageId} = paramValidation.data;
+        const messageId = String(req.params.messageId);
         const record = messages.get(messageId);
 
         if (!record) {

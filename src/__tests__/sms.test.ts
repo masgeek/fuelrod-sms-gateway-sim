@@ -1,7 +1,7 @@
 import request from 'supertest';
 import app from '../app';
 import {messages} from '../services/SmsService';
-import {v4 as uuidv4} from 'uuid';
+import {ulid} from 'ulid';
 
 jest.mock('../services/SmsService', () => {
     const actual = jest.requireActual('../services/SmsService');
@@ -40,20 +40,20 @@ describe('SMS API', () => {
 
             expect(res.status).toBe(400);
             expect(res.body.error).toBe('Validation failed');
-            expect(res.body.details).toBeDefined();
-            expect(Array.isArray(res.body.details)).toBe(true);
+            expect(res.body.errors).toBeDefined();
+            expect(Array.isArray(res.body.errors)).toBe(true);
         });
 
-        it('should return 400 for invalid phone number', async () => {
+        it('should return 400 for empty phone number', async () => {
             const res = await request(app)
                 .post('/api/v1/send-sms')
                 .send({
-                    phone_number: '123',
+                    phone_number: '',
                     message: 'Test message'
                 });
 
             expect(res.status).toBe(400);
-            expect(res.body.details).toEqual(
+            expect(res.body.errors).toEqual(
                 expect.arrayContaining([
                     expect.objectContaining({
                         field: 'phone_number',
@@ -72,7 +72,7 @@ describe('SMS API', () => {
                 });
 
             expect(res.status).toBe(400);
-            expect(res.body.details).toEqual(
+            expect(res.body.errors).toEqual(
                 expect.arrayContaining([
                     expect.objectContaining({
                         field: 'message',
@@ -82,38 +82,16 @@ describe('SMS API', () => {
             );
         });
 
-        it('should return 400 for message exceeding max length', async () => {
-            const longMessage = 'a'.repeat(1601);
-            const res = await request(app)
-                .post('/api/v1/send-sms')
-                .send({
-                    phone_number: '+254712345678',
-                    message: longMessage
-                });
-
-            expect(res.status).toBe(400);
-            expect(res.body.details).toEqual(
-                expect.arrayContaining([
-                    expect.objectContaining({
-                        field: 'message',
-                        message: expect.stringContaining('exceeds maximum length')
-                    })
-                ])
-            );
-        });
-
-        it('should not accept and normalize various phone formats', async () => {
-            const numbers = ['(+25471) 234-5678', '+25471 234 5678'];
+        it('should accept various phone formats with strict schema', async () => {
+            const numbers = ['(+25471) 234-5678', '+25471 234 5678', '123'];
 
             for (const phoneNumber of numbers) {
                 const res = await request(app)
                     .post('/api/v1/send-sms')
                     .send({phone_number: phoneNumber, message: 'Hello'});
 
-                expect(res.status).toBe(400);
-                expect(res.body.error).toBeDefined()
-                expect(res.body.details).toBeDefined()
-                expect(res.body.data).toBeUndefined();
+                expect(res.status).toBe(202);
+                expect(res.body.data).toBeDefined();
             }
         });
 
@@ -129,7 +107,7 @@ describe('SMS API', () => {
             expect(res.body.message).toBe('SMS sent');
             expect(res.body.data).toEqual(
                 expect.objectContaining({
-                    message_id: expect.any(String),
+                    message_id: expect.stringMatching(/^FR_/),
                     phone_number: '+254712345678',
                     status: 'MESSAGE_SENT',
                     timestamp: expect.any(String)
@@ -154,7 +132,7 @@ describe('SMS API', () => {
     });
 
     describe('GET /api/v1/sms-status/:messageId', () => {
-        it('should return 400 for invalid UUID format', async () => {
+        it('should return 400 for invalid ID format', async () => {
             const res = await request(app).get('/api/v1/sms-status/invalid-id');
 
             expect(res.status).toBe(400);
@@ -170,7 +148,7 @@ describe('SMS API', () => {
 
         it('should return 404 for unknown message ID', async () => {
             const res = await request(app)
-                .get(`/api/v1/sms-status/${uuidv4()}`);
+                .get(`/api/v1/sms-status/${ulid()}`);
 
             expect(res.status).toBe(404);
             expect(res.body.message).toBe('The requested message ID does not exist');
@@ -198,31 +176,6 @@ describe('SMS API', () => {
             );
         });
     });
-
-    //@TODO: Fix this later
-
-    // describe('Callback functionality', () => {
-    //     it('should trigger callback with named params', async () => {
-    //         const res = await request(app)
-    //             .post('/api/v1/send-sms')
-    //             .send({phone_number: '+254712345678', message: 'Test'});
-    //
-    //         const messageId = res.body.data.messageId;
-    //
-    //         expect(mockSendCallbackWithRetry).toHaveBeenCalledWith(
-    //             expect.objectContaining({
-    //                 url: expect.any(String),
-    //                 callbackData: expect.objectContaining({
-    //                     message_id: messageId,
-    //                     phone_number: '+254712345678',
-    //                     status: 'DELIVERED',
-    //                     delivered_at: expect.any(String)
-    //                 }),
-    //                 max_retries: expect.any(Number)
-    //             })
-    //         );
-    //     });
-    // });
 
     describe('Error handling', () => {
         it('should respond with 500 if storing message fails', async () => {

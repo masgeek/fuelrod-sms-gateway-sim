@@ -1,9 +1,12 @@
 import {Router} from 'express';
-import {test,sendSms, getSmsStatus} from '../controllers/SmsController';
+import {sendSms, getSmsStatus, getAllSmsMessages, getCallbackQueue, getFailedCallbacks} from '../controllers/SmsController';
 
 const router = Router();
 
 router.post('/send-sms', sendSms);
 router.get('/sms-status/:messageId', getSmsStatus);
+router.get('/messages', getAllSmsMessages);
+router.get('/callback-queue', getCallbackQueue);
+router.get('/failed-callbacks', getFailedCallbacks);
 
 export default router;

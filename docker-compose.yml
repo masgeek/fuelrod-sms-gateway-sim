@@ -1,18 +1,47 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: sms-postgres
+    environment:
+      POSTGRES_DB: sms_gateway
+      POSTGRES_USER: sms_user
+      POSTGRES_PASSWORD: sms_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sms_user -d sms_gateway"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   sms-gateway:
     build:
       context: .
       dockerfile: Dockerfile
     image: masgeek/fuelrod-sms-gateway:${TAG_VERSION:-latest}
     container_name: sms-gateway
-    #    env_file:
-    #      - .env.production
+    environment:
+      NODE_ENV: production
+      DB_TYPE: postgresql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: sms_gateway
+      DB_USER: sms_user
+      DB_PASSWORD: sms_password
+      SMS_CALLBACK_URL: https://n8n.munywele.co.ke/webhook/fuelrod-sms-gateway
+      FUELROD_API_URL: https://api.munywele.co.ke
+      MAX_RETRIES: 3
     ports:
       - "3002:3000"
     volumes:
       - sms-data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost/api/health" ]
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -21,3 +50,6 @@ volumes:
   sms-data:
     driver: local
     name: sms-data
+  postgres-data:
+    driver: local
+    name: postgres-data

@@ -29,8 +29,11 @@ WORKDIR /app
 
 COPY --from=builder --chown=app:app /app/node_modules ./node_modules
 COPY --from=builder --chown=app:app /app/package.json ./
+COPY --from=builder --chown=app:app /app/prisma ./prisma
+COPY --from=builder --chown=app:app /app/src/generated ./src/generated
 COPY --from=builder --chown=app:app /app/dist ./dist
 COPY --from=builder --chown=app:app /app/ecosystem.config.js ./
+COPY --from=builder --chown=app:app /app/prisma.config.ts ./
 
 RUN mkdir -p data logs \
     && chown app:app data logs
@@ -43,4 +46,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:3000/api/health || exit 1
 
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["npx", "pm2-runtime", "ecosystem.config.js"]
+CMD ["sh", "-c", "if [ -n \"$DATABASE_URL\" ]; then npx prisma migrate deploy; fi && npx pm2-runtime ecosystem.config.js"]

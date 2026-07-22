@@ -1,6 +1,6 @@
 import {Request, Response} from 'express';
 import {ulid} from 'ulid';
-import {messages, sendCallbackWithRetry} from '../services/SmsService';
+import {messages} from '../services/SmsService';
 import {config} from '../config/env';
 import {SmsMessage, SmsMessageResp} from '../models/SmsMessage';
 import {sendSmsSchema, getSmsStatusSchema, sendSmsSchemaStrict} from '../validators/SmsValidator';
@@ -9,13 +9,17 @@ import {ZodError} from 'zod';
 import {enrichCarrierInfo} from "../lib/EnrichCarrier";
 
 
-const DELIVERY_PROBABILITY = 0.65;
-const ABSENT_PROBABILITY = 0.90;       // cumulative (0.65 + 0.25)
-const OPTED_OUT_PROBABILITY = 0.95;    // cumulative (0.90 + 0.05)
-// remainder (0.05) is DELIVERY_FAILED
+// Cumulative probability thresholds for simulated SMS delivery outcomes.
+// DELIVERED_TO_HANDSET: 80%
+// ABSENT_SUBSCRIBER:    15% (0.80 -> 0.95)
+// OPTED_OUT:             3% (0.95 -> 0.98)
+// DELIVERY_FAILED:       2% (0.98 -> 1.00, remainder)
+const DELIVERY_PROBABILITY = 0.80;
+const ABSENT_PROBABILITY = 0.95;
+const OPTED_OUT_PROBABILITY = 0.98;
 
 export enum DeliveryStatus {
-    DELIVERED_TO_HANDSET = 'DELIVERED_TO_HANDSET',
+    DELIVERED = 'DELIVERED',
     ABSENT_SUBSCRIBER = 'ABSENT_SUBSCRIBER',
     OPTED_OUT = 'OPTED_OUT',
     DELIVERY_FAILED = 'DELIVERY_FAILED'
@@ -25,7 +29,7 @@ export function getRandomDeliveryStatus(): DeliveryStatus {
     const random = Math.random();
 
     if (random < DELIVERY_PROBABILITY) {
-        return DeliveryStatus.DELIVERED_TO_HANDSET;
+        return DeliveryStatus.DELIVERED;
     }
 
     if (random < ABSENT_PROBABILITY) {
@@ -105,20 +109,17 @@ export const sendSms = async (req: Request, res: Response): Promise<Response> =>
             delivered_at: new Date().toISOString()
         };
 
-        messages.set(messageId, payload);
-        // Immediately trigger callback if configured
+        await messages.set(messageId, payload);
+        // Enqueue callback for batch processing
         if (config.callback_url) {
-
-
             const callbackData = {...payload, status: getRandomDeliveryStatus()};
-            sendCallbackWithRetry({
-                    url: config.callback_url,
-                    callBackData: callbackData,
-                    max_retries: config.max_retries
-                }
-            ).catch(error => {
-                logger.error(`Failed to send callback for ${messageId}:`, error);
-            });
+            await messages.enqueueCallback(
+                config.callback_url,
+                config.fallback_callback_url,
+                callbackData,
+                config.max_retries
+            );
+            logger.info(`Callback enqueued for ${messageId}`);
         }
 
         return res.status(202).json({
@@ -155,7 +156,7 @@ export const getSmsStatus = async (req: Request, res: Response): Promise<Respons
         }
 
         const messageId = String(req.params.messageId);
-        const record = messages.get(messageId);
+        const record = await messages.get(messageId);
 
         if (!record) {
             logger.warn(`❌ Message not found: ${messageId}`);
@@ -192,24 +193,84 @@ export const getSmsStatus = async (req: Request, res: Response): Promise<Respons
  */
 export const getAllSmsMessages = async (req: Request, res: Response): Promise<Response> => {
     try {
-        const allMessages = Array.from(messages.entries()).map(([id, message]) => ({
-            id,
-            ...message
-        }));
-
-        logger.info(`📊 Retrieved ${allMessages.length} SMS messages`);
+        const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 500);
+        const page = Math.max(Number(req.query.page) || 1, 1);
+        const offset = (page - 1) * limit;
+        const data = await messages.getAllMessages(limit, offset);
+        const total = await messages.getMessageCount();
+        const totalPages = Math.ceil(total / limit);
 
         return res.json({
             success: true,
-            data: allMessages,
-            total: allMessages.length
+            data,
+            pagination: {
+                total,
+                page,
+                limit,
+                totalPages,
+                hasMore: page < totalPages,
+            }
         });
-
     } catch (error) {
-        logger.error('❌ Unexpected error in getAllSmsMessages:', error);
-        return res.status(500).json({
-            error: 'Internal server error',
-            message: 'Failed to retrieve SMS messages'
+        logger.error('Error in getAllSmsMessages:', error);
+        return res.status(500).json({error: 'Internal server error'});
+    }
+};
+
+/**
+ * Get callback queue
+ */
+export const getCallbackQueue = async (req: Request, res: Response): Promise<Response> => {
+    try {
+        const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 500);
+        const page = Math.max(Number(req.query.page) || 1, 1);
+        const offset = (page - 1) * limit;
+        const data = await messages.getAllCallbackQueue(limit, offset);
+        const total = await messages.getCallbackQueueCount();
+        const totalPages = Math.ceil(total / limit);
+
+        return res.json({
+            success: true,
+            data,
+            pagination: {
+                total,
+                page,
+                limit,
+                totalPages,
+                hasMore: page < totalPages,
+            }
         });
+    } catch (error) {
+        logger.error('Error in getCallbackQueue:', error);
+        return res.status(500).json({error: 'Internal server error'});
+    }
+};
+
+/**
+ * Get failed callbacks
+ */
+export const getFailedCallbacks = async (req: Request, res: Response): Promise<Response> => {
+    try {
+        const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 500);
+        const page = Math.max(Number(req.query.page) || 1, 1);
+        const offset = (page - 1) * limit;
+        const data = await messages.getAllFailedCallbacks(limit, offset);
+        const total = await messages.getFailedCallbackCount();
+        const totalPages = Math.ceil(total / limit);
+
+        return res.json({
+            success: true,
+            data,
+            pagination: {
+                total,
+                page,
+                limit,
+                totalPages,
+                hasMore: page < totalPages,
+            }
+        });
+    } catch (error) {
+        logger.error('Error in getFailedCallbacks:', error);
+        return res.status(500).json({error: 'Internal server error'});
     }
 };

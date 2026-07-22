@@ -5,7 +5,7 @@
 ```bash
 pnpm install
 pnpm build            # tsc → dist/
-pnpm dev              # ts-node-dev with NODE_ENV=development
+pnpm dev              # ts-node-dev with NODE_ENV=development (SQLite)
 pnpm test             # jest (single run)
 pnpm test:watch       # jest --watch
 pnpm test:coverage    # jest --coverage
@@ -15,22 +15,39 @@ No separate lint/typecheck step exists — `pnpm build` (tsc) is the typecheck.
 
 ## Project
 
-Express 5 SMS mock gateway. Accepts SMS send requests, stores them in SQLite (`better-sqlite3`), and fires async callbacks with randomized delivery statuses.
+Express 5 SMS mock gateway. Accepts SMS send requests, stores them in PostgreSQL or SQLite, and fires async callbacks with randomized delivery statuses.
 
 - **Entry**: `src/index.ts` → `src/app.ts`
 - **Routes**: `src/routes/SmsRoutes.ts` → `src/controllers/SmsController.ts`
-- **Storage**: `src/services/MessageStore.ts` — SQLite with WAL mode, TTL-based eviction (default 1h, configurable via `MESSAGE_TTL_MS`)
+- **Storage**: `src/services/MessageStore.ts` — Prisma (PostgreSQL) or better-sqlite3 (SQLite)
 - **Validation**: Zod v4 schemas in `src/validators/SmsValidator.ts` (uses `sendSmsSchemaStrict`, not `sendSmsSchema`)
 - **Middleware**: rate limiter (`src/middleware/rateLimiter.ts`), request logging, global error handler
-- **Env**: `src/config/env.ts` — loads `.env.production` → `.env.${NODE_ENV}` → `.env` in order (last wins)
+- **Config**: `src/config/env.ts` — loads `.env.production` → `.env.testing`/`.env.${NODE_ENV}` → `.env`
+- **Prisma**: `prisma/schema.prisma` — schema definition, `prisma/migrations/` for versioned migrations
+
+## Database
+
+```bash
+# Switch database via DB_TYPE env var
+DB_TYPE=postgresql  # Production
+DB_TYPE=sqlite      # Local dev (default)
+
+# Prisma commands
+pnpm db:migrate          # Apply migrations
+pnpm db:migrate:dev      # Create new migration
+pnpm db:generate         # Regenerate Prisma client
+pnpm db:studio           # Open Prisma Studio
+pnpm migrate:sqlite-to-pg  # Migrate data from SQLite to PostgreSQL
+```
 
 ## Testing
 
 - Jest + ts-jest + supertest
 - Tests live in `src/__tests__/**/*.test.ts`
 - Tests mock `SmsService.sendCallbackWithRetry` and the logger — no HTTP callbacks fire during tests
-- `messages` Map is cleared in `beforeEach`
+- `messages` table is cleared in `beforeEach`
 - Import `ulid` (not `uuid`) when generating test message IDs — `sendSmsSchemaStrict` only validates non-empty strings
+- Tests use in-memory SQLite via `.env.testing` (`DB_TYPE=sqlite`)
 
 ## Gotchas
 
@@ -42,13 +59,15 @@ Express 5 SMS mock gateway. Accepts SMS send requests, stores them in SQLite (`b
 - Production runs via PM2 (`ecosystem.config.js`) with `dist/index.js`
 - `pnpm prod` script has a typo (`indes.ts`) — don't use it
 - SQLite DB path: defaults to `./data/sms.db`, configurable via `SQLITE_DB_PATH`. Docker creates `data/` owned by `app` user
-- Tests use in-memory SQLite (`NODE_ENV=test` → `:memory:`) — no cleanup needed
+- PostgreSQL: uses Prisma ORM, migrations in `prisma/migrations/`
 
 ## Robustness
 
 - **Graceful shutdown**: SIGTERM/SIGINT handlers drain in-flight requests (10s timeout)
-- **Rate limiting**: 100 req/min per IP (configurable via `RATE_LIMIT_MAX`). Returns `429` with `Retry-After` header
+- **Rate limiting**: 1000 req/s per IP (configurable via `RATE_LIMIT_MAX`). Returns `429` with `Retry-After` header
 - **Body size limit**: `express.json({ limit: '100kb' })`
 - **Axios timeout**: 5s on callback requests
 - **Message cleanup**: TTL-based eviction (default 1h, configurable via `MESSAGE_TTL_MS`)
 - **Request logging**: method, path, status, duration via Winston
+- **Callback queue**: async worker polls every 30s, processes batch of 100, parallel execution
+- **Fallback callbacks**: primary URL fails → tries fallback URL

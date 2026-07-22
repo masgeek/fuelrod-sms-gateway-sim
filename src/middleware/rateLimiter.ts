@@ -1,7 +1,7 @@
 import {Request, Response, NextFunction} from 'express';
 
-const WINDOW_MS = 60_000;
-const MAX_REQUESTS = parseEnvInt(process.env.RATE_LIMIT_MAX, 100);
+const WINDOW_MS = 1_000;
+const MAX_REQUESTS = parseEnvInt(process.env.RATE_LIMIT_MAX, 1000);
 
 function parseEnvInt(value: string | undefined, fallback: number): number {
     const n = Number(value);
@@ -42,7 +42,7 @@ export function rateLimiter(req: Request, res: Response, next: NextFunction): vo
         const retryAfter = Math.ceil((entry.resetAt - now) / 1000);
         res.setHeader('Retry-After', retryAfter);
         res.status(429).json({
-            error: 'Too many requests',
+            error: 'Too many requests to the gateway',
             retry_after: retryAfter
         });
         return;

@@ -1,0 +1,111 @@
+name: Deploy to Dokploy (via n8n)
+description: Triggers a Dokploy redeploy through an n8n webhook
+
+inputs:
+  n8n_webhook_url:
+    description: n8n webhook URL
+    required: true
+
+  n8n_webhook_token:
+    description: Bearer token for the n8n webhook
+    required: true
+
+  compose_id:
+    description: Dokploy Compose ID
+    required: true
+
+  image_name:
+    description: Docker image that was deployed
+    required: true
+
+runs:
+  using: composite
+
+  steps:
+    - name: Trigger n8n deployment
+      uses: actions/github-script@v8
+      env:
+        COMPOSE_ID: ${{ inputs.compose_id }}
+        IMAGE_NAME: ${{ inputs.image_name }}
+        WEBHOOK_URL: ${{ inputs.n8n_webhook_url }}
+        WEBHOOK_TOKEN: ${{ inputs.n8n_webhook_token }}
+
+        REPOSITORY: ${{ github.repository }}
+        ACTOR: ${{ github.actor }}
+        REF_NAME: ${{ github.ref_name }}
+        SHA: ${{ github.sha }}
+        RUN_NUMBER: ${{ github.run_number }}
+        RUN_ATTEMPT: ${{ github.run_attempt }}
+        RUN_ID: ${{ github.run_id }}
+        WORKFLOW: ${{ github.workflow }}
+        JOB: ${{ github.job }}
+        EVENT: ${{ github.event_name }}
+        SERVER_URL: ${{ github.server_url }}
+
+        COMMIT_MESSAGE: ${{ github.event.head_commit.message || 'Manual workflow dispatch' }}
+
+      with:
+        script: |
+          const payload = {
+            composeId: process.env.COMPOSE_ID,
+            image: process.env.IMAGE_NAME,
+
+            repo: process.env.REPOSITORY,
+            repositoryUrl: `${process.env.SERVER_URL}/${process.env.REPOSITORY}`,
+
+            actor: process.env.ACTOR,
+            ref: process.env.REF_NAME,
+
+            sha: process.env.SHA,
+            shortSha: process.env.SHA.substring(0, 7),
+
+            workflow: process.env.WORKFLOW,
+            job: process.env.JOB,
+
+            runNumber: process.env.RUN_NUMBER,
+            runAttempt: process.env.RUN_ATTEMPT,
+            runId: process.env.RUN_ID,
+            runUrl: `${process.env.SERVER_URL}/${process.env.REPOSITORY}/actions/runs/${process.env.RUN_ID}`,
+
+            event: process.env.EVENT,
+
+            timestamp: new Date().toISOString(),
+
+            commitMessage: process.env.COMMIT_MESSAGE,
+
+            summary: `🚀 Deployment Triggered
+  
+            ${process.env.COMMIT_MESSAGE}
+          
+          Repository : ${process.env.REPOSITORY}
+          Branch     : ${process.env.REF_NAME}
+          Image      : ${process.env.IMAGE_NAME}
+          Commit     : ${process.env.SHA.substring(0, 7)}
+          Commit SHA : ${process.env.SHA}
+          Actor      : ${process.env.ACTOR}
+          Workflow   : ${process.env.WORKFLOW}
+          Run        : #${process.env.RUN_NUMBER} (Attempt ${process.env.RUN_ATTEMPT})
+          Event      : ${process.env.EVENT}
+          Run URL    : ${process.env.SERVER_URL}/${process.env.REPOSITORY}/actions/runs/${process.env.RUN_ID}`
+            };
+            
+            console.log("Payload:");
+            console.log(JSON.stringify(payload, null, 2));
+            
+            const response = await fetch(process.env.WEBHOOK_URL, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${process.env.WEBHOOK_TOKEN}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+          });
+            
+            const responseBody = await response.text();
+            
+            console.log(`HTTP ${response.status}`);
+            console.log(responseBody);
+            
+            if (!response.ok) {
+            core.setFailed(`Webhook returned ${response.status}: ${responseBody}`);
+          }

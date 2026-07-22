@@ -27,8 +27,8 @@ import * as SmsService from '../services/SmsService'; // 👈 import after mock
 const mockSendCallbackWithRetry = SmsService.sendCallbackWithRetry as jest.Mock;
 
 describe('SMS API', () => {
-    beforeEach(() => {
-        messages.clear();
+    beforeEach(async () => {
+        await messages.clear();
         jest.clearAllMocks();
     });
 
@@ -114,7 +114,7 @@ describe('SMS API', () => {
                 })
             );
 
-            expect(messages.has(res.body.data.message_id)).toBe(true);
+            expect(await messages.has(res.body.data.message_id)).toBe(true);
         });
 
         it('should trim message whitespace', async () => {
@@ -127,7 +127,7 @@ describe('SMS API', () => {
 
             expect(res.status).toBe(202);
             const messageId = res.body.data.message_id;
-            expect(messages.get(messageId)).toBeDefined();
+            expect(await messages.get(messageId)).toBeDefined();
         });
     });
 
@@ -179,7 +179,7 @@ describe('SMS API', () => {
 
     describe('Error handling', () => {
         it('should respond with 500 if storing message fails', async () => {
-            jest.spyOn(messages, 'set').mockImplementationOnce(() => {
+            jest.spyOn(messages, 'set').mockImplementationOnce(async () => {
                 throw new Error('Simulated storage failure');
             });
 

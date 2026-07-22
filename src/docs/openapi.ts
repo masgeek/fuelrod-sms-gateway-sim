@@ -38,6 +38,53 @@ const HealthResponse = registry.register('HealthResponse', z.object({
     timestamp: z.string(),
 }));
 
+const PaginationQuery = z.object({
+    page: z.coerce.number().int().min(1).default(1).openapi({example: 1}),
+    limit: z.coerce.number().int().min(1).max(500).default(20).openapi({example: 20}),
+});
+
+const PaginationMeta = z.object({
+    total: z.number(),
+    page: z.number(),
+    limit: z.number(),
+    totalPages: z.number(),
+    hasMore: z.boolean(),
+});
+
+const MessageListItem = z.object({
+    message_id: z.string(),
+    phone_number: z.string(),
+    network_code: z.number(),
+    status: z.string(),
+    callback_status: z.string(),
+    delivered_at: z.string().nullable(),
+    created_at: z.string(),
+});
+
+const CallbackQueueItem = z.object({
+    id: z.number(),
+    url: z.string(),
+    fallback_url: z.string().nullable(),
+    payload: z.string(),
+    status: z.string(),
+    attempts: z.number(),
+    max_attempts: z.number(),
+    last_error: z.string().nullable(),
+    next_retry: z.string(),
+    created_at: z.string(),
+});
+
+const FailedCallbackItem = z.object({
+    id: z.number(),
+    url: z.string(),
+    payload: z.string(),
+    attempts: z.number(),
+    max_attempts: z.number(),
+    last_error: z.string().nullable(),
+    next_retry: z.string(),
+    created_at: z.string(),
+});
+
 registry.registerPath({
     method: 'get',
     path: '/api/health',
@@ -126,6 +173,69 @@ registry.registerPath({
             content: {'application/json': {schema: z.object({
                 error: z.literal('Message not found'),
                 message: z.string(),
+            })}},
+        },
+    },
+});
+
+registry.registerPath({
+    method: 'get',
+    path: '/api/v1/messages',
+    tags: ['Messages'],
+    summary: 'List all messages',
+    description: 'Returns a paginated list of all SMS messages.',
+    request: {
+        query: PaginationQuery,
+    },
+    responses: {
+        200: {
+            description: 'Messages retrieved',
+            content: {'application/json': {schema: z.object({
+                success: z.literal(true),
+                data: z.array(MessageListItem),
+                pagination: PaginationMeta,
+            })}},
+        },
+    },
+});
+
+registry.registerPath({
+    method: 'get',
+    path: '/api/v1/callback-queue',
+    tags: ['Callbacks'],
+    summary: 'List callback queue',
+    description: 'Returns a paginated list of pending callbacks.',
+    request: {
+        query: PaginationQuery,
+    },
+    responses: {
+        200: {
+            description: 'Callback queue retrieved',
+            content: {'application/json': {schema: z.object({
+                success: z.literal(true),
+                data: z.array(CallbackQueueItem),
+                pagination: PaginationMeta,
+            })}},
+        },
+    },
+});
+
+registry.registerPath({
+    method: 'get',
+    path: '/api/v1/failed-callbacks',
+    tags: ['Callbacks'],
+    summary: 'List failed callbacks',
+    description: 'Returns a paginated list of failed callbacks.',
+    request: {
+        query: PaginationQuery,
+    },
+    responses: {
+        200: {
+            description: 'Failed callbacks retrieved',
+            content: {'application/json': {schema: z.object({
+                success: z.literal(true),
+                data: z.array(FailedCallbackItem),
+                pagination: PaginationMeta,
             })}},
         },
     },

@@ -7,7 +7,7 @@ const NODE_ENV = process.env.NODE_ENV || 'production';
 
 const envFiles: string[] = [
     '.env.production',              // Load production defaults
-    `.env.${NODE_ENV}`,             // Environment-specific overrides
+    NODE_ENV === 'test' ? '.env.testing' : `.env.${NODE_ENV}`,  // Environment-specific overrides
     '.env'                          // Final local override
 ];
 

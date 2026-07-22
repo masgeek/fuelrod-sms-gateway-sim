@@ -1,1 +1,4 @@
-process.env.NODE_ENV = 'test';
+import dotenv from 'dotenv';
+import path from 'path';
+
+dotenv.config({path: path.resolve(__dirname, '../../.env.testing'), override: true});

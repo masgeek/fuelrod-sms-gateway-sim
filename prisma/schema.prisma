@@ -20,6 +20,7 @@ model Message {
   @@index([created_at])
   @@index([callback_status])
   @@index([deleted_at])
+  @@map("messages")
 }
 
 model FailedCallback {
@@ -33,6 +34,7 @@ model FailedCallback {
   created_at   DateTime @default(now())
 
   @@index([next_retry])
+  @@map("failed_callbacks")
 }
 
 model CallbackQueue {
@@ -48,9 +50,12 @@ model CallbackQueue {
   created_at   DateTime @default(now())
 
   @@index([status, next_retry])
+  @@map("callback_queue")
 }
 
 model SchemaMigration {
   version    Int      @id
   applied_at DateTime @default(now())
+
+  @@map("schema_migrations")
 }

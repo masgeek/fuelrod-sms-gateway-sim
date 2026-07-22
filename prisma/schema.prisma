@@ -1,0 +1,56 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Message {
+  message_id      String    @id
+  phone_number    String
+  network_code    Int       @default(0)
+  status          String
+  callback_status String    @default("pending")
+  delivered_at    String?
+  created_at      DateTime  @default(now())
+  deleted_at      DateTime?
+
+  @@index([created_at])
+  @@index([callback_status])
+  @@index([deleted_at])
+}
+
+model FailedCallback {
+  id           Int      @id @default(autoincrement())
+  url          String
+  payload      String
+  attempts     Int      @default(0)
+  max_attempts Int      @default(5)
+  last_error   String?
+  next_retry   DateTime
+  created_at   DateTime @default(now())
+
+  @@index([next_retry])
+}
+
+model CallbackQueue {
+  id           Int      @id @default(autoincrement())
+  url          String
+  fallback_url String?
+  payload      String
+  status       String   @default("pending")
+  attempts     Int      @default(0)
+  max_attempts Int      @default(3)
+  last_error   String?
+  next_retry   DateTime @default(now())
+  created_at   DateTime @default(now())
+
+  @@index([status, next_retry])
+}
+
+model SchemaMigration {
+  version    Int      @id
+  applied_at DateTime @default(now())
+}

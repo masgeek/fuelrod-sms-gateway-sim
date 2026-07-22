@@ -55,46 +55,50 @@ export async function sendCallbackWithRetry({
 
 function startCallbackWorker(): void {
     const timer = setInterval(async () => {
-        const batch = messages.dequeuePendingCallbacksBatch(100);
-        if (batch.length === 0) return;
+        try {
+            const batch = await messages.dequeuePendingCallbacksBatch(100);
+            if (batch.length === 0) return;
 
-        logger.info(`Callback worker: processing ${batch.length} callbacks`);
+            logger.info(`Callback worker: processing ${batch.length} callbacks`);
 
-        const promises = batch.map(async (job) => {
-            let payload: Record<string, any>;
-            try {
-                payload = JSON.parse(job.payload);
-            } catch {
-                logger.error(`Corrupt callback payload (id=${job.id}) — discarding`);
-                messages.markCallbackQueueFailed(job.id);
-                return;
-            }
-
-            const targetUrl = job.attempts === 0 ? job.url : (job.fallback_url ?? job.url);
-
-            try {
-                await postCallback(targetUrl, payload);
-                logger.info(`Callback worker: success (id=${job.id}, url=${targetUrl})`);
-                messages.markCallbackQueueSuccess(job.id);
-                if (payload.message_id) {
-                    messages.markCallbackStatus(payload.message_id, 'sent');
+            const promises = batch.map(async (job) => {
+                let payload: Record<string, any>;
+                try {
+                    payload = JSON.parse(job.payload);
+                } catch {
+                    logger.error(`Corrupt callback payload (id=${job.id}) — discarding`);
+                    await messages.markCallbackQueueFailed(job.id);
+                    return;
                 }
-            } catch (err: any) {
-                if (job.attempts >= job.max_attempts) {
-                    logger.error(`Callback worker: permanently failed (id=${job.id})`, {lastError: err.message});
-                    messages.markCallbackQueueFailed(job.id);
+
+                const targetUrl = job.attempts === 0 ? job.url : (job.fallback_url ?? job.url);
+
+                try {
+                    await postCallback(targetUrl, payload);
+                    logger.info(`Callback worker: success (id=${job.id}, url=${targetUrl})`);
+                    await messages.markCallbackQueueSuccess(job.id);
                     if (payload.message_id) {
-                        messages.markCallbackStatus(payload.message_id, 'failed');
+                        await messages.markCallbackStatus(payload.message_id, 'sent');
                     }
-                } else {
-                    logger.warn(`Callback worker: retry (id=${job.id}, attempt=${job.attempts + 1}/${job.max_attempts})`, {lastError: err.message});
-                    messages.markCallbackQueueRetry(job.id, job.attempts + 1, 0, err.message);
+                } catch (err: any) {
+                    if (job.attempts >= job.max_attempts) {
+                        logger.error(`Callback worker: permanently failed (id=${job.id})`, {lastError: err.message});
+                        await messages.markCallbackQueueFailed(job.id);
+                        if (payload.message_id) {
+                            await messages.markCallbackStatus(payload.message_id, 'failed');
+                        }
+                    } else {
+                        logger.warn(`Callback worker: retry (id=${job.id}, attempt=${job.attempts + 1}/${job.max_attempts})`, {lastError: err.message});
+                        await messages.markCallbackQueueRetry(job.id, job.attempts + 1, 0, err.message);
+                    }
                 }
-            }
-        });
+            });
 
-        await Promise.all(promises);
-    }, 30_000); // Run every 30 seconds
+            await Promise.all(promises);
+        } catch (err: any) {
+            logger.error('Callback worker error', err);
+        }
+    }, 30_000);
 
     timer.unref();
 }

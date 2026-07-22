@@ -1,5 +1,7 @@
 allowBuilds:
+  '@prisma/engines': true
   '@scarf/scarf': true
   better-sqlite3: true
   core-js: set this to true or false
+  prisma: true
   unrs-resolver: true

@@ -109,11 +109,11 @@ export const sendSms = async (req: Request, res: Response): Promise<Response> =>
             delivered_at: new Date().toISOString()
         };
 
-        messages.set(messageId, payload);
+        await messages.set(messageId, payload);
         // Enqueue callback for batch processing
         if (config.callback_url) {
             const callbackData = {...payload, status: getRandomDeliveryStatus()};
-            messages.enqueueCallback(
+            await messages.enqueueCallback(
                 config.callback_url,
                 config.fallback_callback_url,
                 callbackData,
@@ -156,7 +156,7 @@ export const getSmsStatus = async (req: Request, res: Response): Promise<Respons
         }
 
         const messageId = String(req.params.messageId);
-        const record = messages.get(messageId);
+        const record = await messages.get(messageId);
 
         if (!record) {
             logger.warn(`❌ Message not found: ${messageId}`);
@@ -196,8 +196,8 @@ export const getAllSmsMessages = async (req: Request, res: Response): Promise<Re
         const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 500);
         const page = Math.max(Number(req.query.page) || 1, 1);
         const offset = (page - 1) * limit;
-        const data = messages.getAllMessages(limit, offset);
-        const total = messages.getMessageCount();
+        const data = await messages.getAllMessages(limit, offset);
+        const total = await messages.getMessageCount();
         const totalPages = Math.ceil(total / limit);
 
         return res.json({
@@ -225,8 +225,8 @@ export const getCallbackQueue = async (req: Request, res: Response): Promise<Res
         const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 500);
         const page = Math.max(Number(req.query.page) || 1, 1);
         const offset = (page - 1) * limit;
-        const data = messages.getAllCallbackQueue(limit, offset);
-        const total = messages.getCallbackQueueCount();
+        const data = await messages.getAllCallbackQueue(limit, offset);
+        const total = await messages.getCallbackQueueCount();
         const totalPages = Math.ceil(total / limit);
 
         return res.json({
@@ -254,8 +254,8 @@ export const getFailedCallbacks = async (req: Request, res: Response): Promise<R
         const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 500);
         const page = Math.max(Number(req.query.page) || 1, 1);
         const offset = (page - 1) * limit;
-        const data = messages.getAllFailedCallbacks(limit, offset);
-        const total = messages.getFailedCallbackCount();
+        const data = await messages.getAllFailedCallbacks(limit, offset);
+        const total = await messages.getFailedCallbackCount();
         const totalPages = Math.ceil(total / limit);
 
         return res.json({

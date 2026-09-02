@@ -26,7 +26,7 @@ export interface FailedCallback {
 }
 
 class PrismaStore {
-    private client: PrismaClient;
+    private readonly client: PrismaClient;
 
     constructor(dbUrl: string) {
         const adapter = new PrismaPg({connectionString: dbUrl});

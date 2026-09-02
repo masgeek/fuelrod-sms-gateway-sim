@@ -9,38 +9,50 @@ import {ZodError} from 'zod';
 import {enrichCarrierInfo} from "../lib/EnrichCarrier";
 
 
-// Cumulative probability thresholds for simulated SMS delivery outcomes.
-// DELIVERED_TO_HANDSET: 80%
-// ABSENT_SUBSCRIBER:    15% (0.80 -> 0.95)
-// OPTED_OUT:             3% (0.95 -> 0.98)
-// DELIVERY_FAILED:       2% (0.98 -> 1.00, remainder)
-const DELIVERY_PROBABILITY = 0.80;
-const ABSENT_PROBABILITY = 0.95;
-const OPTED_OUT_PROBABILITY = 0.98;
+// Percentage shares for simulated SMS delivery outcomes — edit these freely, they just need to sum to 100.
+const DELIVERED_PERCENT = 63.75;
+const ABSENT_SUBSCRIBER_PERCENT = 15;
+const OPTED_OUT_PERCENT = 0.25;
+const DELIVERY_FAILED_PERCENT = 0.75;
+const SENT_PERCENT = 20.25; // accepted by carrier, delivery unconfirmed — remainder in practice
+
+// Cumulative thresholds (0-100), derived automatically from the percentages above.
+const DELIVERY_THRESHOLD = DELIVERED_PERCENT;
+const ABSENT_THRESHOLD = DELIVERY_THRESHOLD + ABSENT_SUBSCRIBER_PERCENT;
+const OPTED_OUT_THRESHOLD = ABSENT_THRESHOLD + OPTED_OUT_PERCENT;
+const DELIVERY_FAILED_THRESHOLD = OPTED_OUT_THRESHOLD + DELIVERY_FAILED_PERCENT;
+
+// SENT covers whatever remains up to 100.
+
 
 export enum DeliveryStatus {
     DELIVERED = 'DELIVERED',
     ABSENT_SUBSCRIBER = 'ABSENT_SUBSCRIBER',
     OPTED_OUT = 'OPTED_OUT',
-    DELIVERY_FAILED = 'DELIVERY_FAILED'
+    DELIVERY_FAILED = 'FAILED',
+    SENT = 'SENT'
 }
 
 export function getRandomDeliveryStatus(): DeliveryStatus {
-    const random = Math.random();
+    const roll = Math.random() * 100;
 
-    if (random < DELIVERY_PROBABILITY) {
+    if (roll < DELIVERY_THRESHOLD) {
         return DeliveryStatus.DELIVERED;
     }
 
-    if (random < ABSENT_PROBABILITY) {
+    if (roll < ABSENT_THRESHOLD) {
         return DeliveryStatus.ABSENT_SUBSCRIBER;
     }
 
-    if (random < OPTED_OUT_PROBABILITY) {
+    if (roll < OPTED_OUT_THRESHOLD) {
         return DeliveryStatus.OPTED_OUT;
     }
 
-    return DeliveryStatus.DELIVERY_FAILED;
+    if (roll < DELIVERY_FAILED_THRESHOLD) {
+        return DeliveryStatus.DELIVERY_FAILED;
+    }
+
+    return DeliveryStatus.SENT;
 }
 
 /**

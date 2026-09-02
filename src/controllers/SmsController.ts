@@ -10,8 +10,8 @@ import {enrichCarrierInfo} from "../lib/EnrichCarrier";
 
 
 // Percentage shares for simulated SMS delivery outcomes — edit these freely, they just need to sum to 100.
-const DELIVERED_PERCENT = 63.75;
-const ABSENT_SUBSCRIBER_PERCENT = 15;
+const DELIVERED_PERCENT = 68.75;
+const ABSENT_SUBSCRIBER_PERCENT = 1;
 const OPTED_OUT_PERCENT = 0.25;
 const DELIVERY_FAILED_PERCENT = 0.75;
 const SENT_PERCENT = 20.25; // accepted by carrier, delivery unconfirmed — remainder in practice

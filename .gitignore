@@ -32,3 +32,8 @@ generated/
 
 # SQLite
 data/
+
+/src/generated/prisma
+.agent/
+.agents/
+.windsurf/

@@ -52,7 +52,8 @@ export function getRandomDeliveryStatus(): DeliveryStatus {
         return DeliveryStatus.DELIVERY_FAILED;
     }
 
-    return DeliveryStatus.SENT;
+    // return DeliveryStatus.SENT;
+    return DeliveryStatus.DELIVERED;
 }
 
 /**
